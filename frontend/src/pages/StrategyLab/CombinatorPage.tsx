@@ -139,6 +139,7 @@ export default function CombinatorPage() {
 
   const [exportText, setExportText] = useState<string>('')
   const [exportBusy, setExportBusy] = useState(false)
+  const [configBarOpen, setConfigBarOpen] = useState(false)
 
   const [selectedStrategyId, setSelectedStrategyId] = useState<string>('')
   const [selectedModelId, setSelectedModelId] = useState<string>('')
@@ -560,23 +561,58 @@ export default function CombinatorPage() {
     }
   }
 
-  async function createDefaultXgboostModel() {
+  async function createPresetModelVariant(preset: 'xgboost' | 'lightgbm' | 'catboost') {
     setBusy(true)
     setError(null)
     setMessage(null)
     try {
+      const presets = {
+        xgboost: {
+          slug: 'xgboost-default',
+          name: 'XGBoost (default)',
+          algorithm: 'xgboost',
+          config: { class: 'XGBoostRegressor' },
+          description: 'Default xgboost starter config',
+          tags: ['xgboost', 'default'],
+        },
+        lightgbm: {
+          slug: 'lightgbm-default',
+          name: 'LightGBM (default)',
+          algorithm: 'lightgbm',
+          config: { class: 'LGBMRegressor' },
+          description: 'Default lightgbm starter config',
+          tags: ['lightgbm', 'default'],
+        },
+        catboost: {
+          slug: 'catboost-default',
+          name: 'CatBoost (default)',
+          algorithm: 'catboost',
+          config: { class: 'CatBoostRegressor' },
+          description: 'Default catboost starter config',
+          tags: ['catboost', 'default'],
+        },
+      } as const
+
+      const p = presets[preset]
       await createFreqAIModelVariant({
-        slug: 'xgboost-default',
-        name: 'XGBoost (default)',
-        algorithm: 'xgboost',
-        config: { class: 'XGBoostRegressor' },
-        description: 'Default xgboost starter config',
-        tags: ['xgboost', 'default'],
+        slug: p.slug,
+        name: p.name,
+        algorithm: p.algorithm,
+        config: p.config,
+        description: p.description,
+        tags: [...p.tags],
       })
-      setMessage('Model variant created: xgboost-default')
+      setMessage(`Model variant created: ${p.slug}`)
       await loadAll()
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to create model')
+      const msg = e instanceof Error ? e.message : 'Failed to create model'
+      // existing http client returns generic "HTTP 409" for conflicts
+      if (msg.includes('HTTP 409')) {
+        setMessage('Model variant already exists')
+        await loadAll()
+      } else {
+        setError(msg)
+      }
     } finally {
       setBusy(false)
     }
@@ -730,10 +766,24 @@ export default function CombinatorPage() {
           <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
             <button
               disabled={busy}
-              onClick={() => void createDefaultXgboostModel()}
+              onClick={() => void createPresetModelVariant('xgboost')}
               style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
             >
               Create XGBoost default
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => void createPresetModelVariant('lightgbm')}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+            >
+              Create LightGBM default
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => void createPresetModelVariant('catboost')}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+            >
+              Create CatBoost default
             </button>
           </div>
 
@@ -934,25 +984,76 @@ export default function CombinatorPage() {
               >
                 Delete
               </button>
-            </div>
 
-            {selectedAlignmentId ? (
-              <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <div style={{ fontWeight: 700 }}>Export (Freqtrade/FreqAI)</div>
-                  <button
-                    disabled={exportBusy}
-                    onClick={() => void loadExport(selectedAlignmentId)}
-                    style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
-                  >
-                    {exportBusy ? 'Loading…' : 'Load'}
-                  </button>
-                </div>
-                <textarea value={exportText} readOnly rows={10} style={{ fontFamily: 'monospace' }} />
-              </div>
-            ) : null}
+              <button
+                disabled={!selectedAlignmentId}
+                onClick={() => setConfigBarOpen(true)}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              >
+                Config bar
+              </button>
+            </div>
           </div>
         </Card>
+      </div>
+
+      <div
+        aria-hidden={!configBarOpen}
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          height: '100vh',
+          width: 'min(560px, 92vw)',
+          background: 'var(--surface)',
+          borderLeft: '1px solid var(--border)',
+          transform: configBarOpen ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 180ms ease',
+          zIndex: 50,
+          padding: 12,
+          display: 'grid',
+          gridTemplateRows: 'auto 1fr',
+          gap: 10,
+          boxSizing: 'border-box',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ display: 'grid', gap: 2 }}>
+            <div style={{ fontWeight: 800 }}>Config</div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>
+              Export для синхронизации с Freqtrade/FreqAI (по выбранному alignment)
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              disabled={!selectedAlignmentId || exportBusy}
+              onClick={() => (selectedAlignmentId ? void loadExport(selectedAlignmentId) : undefined)}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+            >
+              {exportBusy ? 'Loading…' : 'Load'}
+            </button>
+            <button
+              onClick={() => setConfigBarOpen(false)}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: 8, alignContent: 'start' }}>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>
+            alignment: <span style={{ fontFamily: 'monospace' }}>{selectedAlignmentId || '—'}</span>
+          </div>
+          <textarea
+            value={exportText}
+            readOnly
+            placeholder={selectedAlignmentId ? 'Нажми Load чтобы получить JSON…' : 'Выбери alignment чтобы загрузить JSON…'}
+            rows={28}
+            style={{ width: '100%', fontFamily: 'monospace' }}
+          />
+        </div>
       </div>
     </div>
   )
