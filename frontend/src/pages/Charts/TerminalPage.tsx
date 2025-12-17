@@ -354,9 +354,11 @@ export default function TerminalPage() {
   const chartDragRef = useRef<{
     active: boolean
     startX: number
+    startY: number
     startEnd: number
     startCount: number
-  }>({ active: false, startX: 0, startEnd: 0, startCount: 0 })
+    mode: 'unset' | 'pan' | 'zoom'
+  }>({ active: false, startX: 0, startY: 0, startEnd: 0, startCount: 0, mode: 'unset' })
 
   const stepOption = (opts: number[], current: number, dir: -1 | 1) => {
     if (!opts.length) return current
@@ -388,7 +390,7 @@ export default function TerminalPage() {
   }
 
   const onChartPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0) return
+    if (e.pointerType === 'mouse' && e.button !== 0) return
     const target = e.currentTarget as HTMLElement
     try {
       target.setPointerCapture(e.pointerId)
@@ -398,8 +400,10 @@ export default function TerminalPage() {
     chartDragRef.current = {
       active: true,
       startX: e.clientX,
+      startY: e.clientY,
       startEnd: clamp(viewEndIndex || candles.length, 0, candles.length),
       startCount: Math.max(1, visibleCount),
+      mode: 'unset',
     }
     setPinnedToEnd(false)
   }
@@ -407,9 +411,35 @@ export default function TerminalPage() {
   const onChartPointerMove = (e: React.PointerEvent) => {
     const drag = chartDragRef.current
     if (!drag.active) return
+
+    const dx = e.clientX - drag.startX
+    const dy = e.clientY - drag.startY
+
+    // For touch: horizontal swipe pans, vertical swipe zooms.
+    if (e.pointerType === 'touch') {
+      if (drag.mode === 'unset') {
+        const dist = Math.abs(dx) + Math.abs(dy)
+        if (dist < 10) return
+        drag.mode = Math.abs(dx) >= Math.abs(dy) ? 'pan' : 'zoom'
+      }
+
+      if (drag.mode === 'zoom') {
+        const threshold = 28
+        if (Math.abs(dy) < threshold) return
+        const dir: -1 | 1 = dy < 0 ? -1 : 1
+        const next = stepOption(visibleDayOptions, visibleDays, dir)
+        if (next !== visibleDays) setVisibleDays(clamp(next, 1, sliderMaxDays))
+        // reset baseline so continuous swipe steps multiple times
+        drag.startY = e.clientY
+        drag.startX = e.clientX
+        return
+      }
+      // else fallthrough to pan
+    }
+
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
     const pxPerBar = rect.width > 0 ? rect.width / Math.max(1, drag.startCount) : 1
-    const barsDelta = Math.round((e.clientX - drag.startX) / pxPerBar)
+    const barsDelta = Math.round(dx / pxPerBar)
     const nextEnd = clamp(drag.startEnd - barsDelta, drag.startCount, candles.length)
     setViewEndIndex(nextEnd)
     setPinnedToEnd(nextEnd >= candles.length)
@@ -423,6 +453,7 @@ export default function TerminalPage() {
       // ignore
     }
     chartDragRef.current.active = false
+    chartDragRef.current.mode = 'unset'
   }
 
   const onChartDoubleClick = () => {
