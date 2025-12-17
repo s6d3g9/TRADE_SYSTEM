@@ -15,6 +15,8 @@ import {
   deleteStrategyAlignment,
   deleteStrategyTemplate,
   exportAlignment,
+  getAlignmentConfigFile,
+  getStrategySource,
   importStrategiesFromRepo,
   listFreqAIModelVariants,
   listStrategyAlignments,
@@ -152,8 +154,10 @@ export default function CombinatorPage() {
   const [strategyConfigBarOpen, setStrategyConfigBarOpen] = useState(false)
   const [modelConfigBarOpen, setModelConfigBarOpen] = useState(false)
   const [configExportBusy, setConfigExportBusy] = useState(false)
-  const [freqtradeConfigText, setFreqtradeConfigText] = useState<string>('')
-  const [freqaiConfigText, setFreqaiConfigText] = useState<string>('')
+  const [strategyFileName, setStrategyFileName] = useState<string>('')
+  const [strategyFileText, setStrategyFileText] = useState<string>('')
+  const [modelConfigFileName, setModelConfigFileName] = useState<string>('config.json')
+  const [modelConfigFileText, setModelConfigFileText] = useState<string>('')
 
   const [selectedStrategyId, setSelectedStrategyId] = useState<string>('')
   const [selectedModelId, setSelectedModelId] = useState<string>('')
@@ -638,29 +642,31 @@ export default function CombinatorPage() {
     }
   }
 
-  async function loadFreqtradeConfig(alignment_id: string) {
-    if (!alignment_id) return
+  async function loadStrategyFile(strategy_id: string) {
+    if (!strategy_id) return
     setConfigExportBusy(true)
     setError(null)
     try {
-      const res = await exportAlignment(alignment_id)
-      setFreqtradeConfigText(JSON.stringify(res.freqtrade ?? {}, null, 2))
+      const res = await getStrategySource(strategy_id)
+      setStrategyFileName(res.filename || 'Strategy.py')
+      setStrategyFileText(res.content || '')
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to export freqtrade config file')
+      setError(e instanceof Error ? e.message : 'Failed to load strategy file')
     } finally {
       setConfigExportBusy(false)
     }
   }
 
-  async function loadFreqaiConfig(alignment_id: string) {
+  async function loadModelConfigFile(alignment_id: string) {
     if (!alignment_id) return
     setConfigExportBusy(true)
     setError(null)
     try {
-      const res = await exportAlignment(alignment_id)
-      setFreqaiConfigText(JSON.stringify(res.freqai ?? {}, null, 2))
+      const res = await getAlignmentConfigFile(alignment_id)
+      setModelConfigFileName(res.filename || 'config.json')
+      setModelConfigFileText(JSON.stringify(res.config ?? {}, null, 2))
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to export freqai config file')
+      setError(e instanceof Error ? e.message : 'Failed to load config.json')
     } finally {
       setConfigExportBusy(false)
     }
@@ -668,11 +674,8 @@ export default function CombinatorPage() {
 
   async function openStrategyConfig() {
     setStrategyConfigBarOpen(true)
-    if (!configAlignmentId) return
-    if (configAlignmentId !== selectedAlignmentId) {
-      applyAlignmentSelection(configAlignmentId)
-    }
-    await loadFreqtradeConfig(configAlignmentId)
+    if (!selectedStrategyId) return
+    await loadStrategyFile(selectedStrategyId)
   }
 
   async function openModelConfig() {
@@ -681,7 +684,7 @@ export default function CombinatorPage() {
     if (configAlignmentId !== selectedAlignmentId) {
       applyAlignmentSelection(configAlignmentId)
     }
-    await loadFreqaiConfig(configAlignmentId)
+    await loadModelConfigFile(configAlignmentId)
   }
 
   return (
@@ -760,7 +763,7 @@ export default function CombinatorPage() {
                   cursor: selectedStrategyId && configAlignmentId ? 'pointer' : 'not-allowed',
                 }}
                 title={!configAlignmentId ? 'Нужен alignment (выбери или создай)' : undefined}
-                disabled={!selectedStrategyId || !configAlignmentId}
+                disabled={!selectedStrategyId}
               >
                 Config
               </button>
@@ -1128,17 +1131,17 @@ export default function CombinatorPage() {
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
-              disabled={!configAlignmentId || configExportBusy}
-              onClick={() => (configAlignmentId ? void loadFreqtradeConfig(configAlignmentId) : undefined)}
+              disabled={!selectedStrategyId || configExportBusy}
+              onClick={() => (selectedStrategyId ? void loadStrategyFile(selectedStrategyId) : undefined)}
               style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
             >
               {configExportBusy ? 'Loading…' : 'Load'}
             </button>
             <button
-              disabled={!freqtradeConfigText.trim()}
+              disabled={!strategyFileText.trim()}
               onClick={() => {
-                const strategySlug = selectedStrategyId ? strategyById.get(selectedStrategyId)?.slug ?? 'strategy' : 'strategy'
-                downloadTextFile(`freqtrade.${strategySlug}.config.json`, freqtradeConfigText, 'application/json')
+                const filename = strategyFileName || 'Strategy.py'
+                downloadTextFile(filename, strategyFileText, 'text/x-python')
               }}
               style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
             >
@@ -1158,9 +1161,9 @@ export default function CombinatorPage() {
             alignment: <span style={{ fontFamily: 'monospace' }}>{configAlignmentId || '—'}</span>
           </div>
           <textarea
-            value={freqtradeConfigText}
+            value={strategyFileText}
             readOnly
-            placeholder={configAlignmentId ? 'Нажми Load чтобы получить freqtrade config…' : 'Выбери/создай alignment чтобы загрузить freqtrade config…'}
+            placeholder={selectedStrategyId ? 'Нажми Load чтобы получить .py файл стратегии…' : 'Выбери стратегию чтобы загрузить её файл…'}
             rows={28}
             style={{ width: '100%', fontFamily: 'monospace' }}
           />
@@ -1197,16 +1200,16 @@ export default function CombinatorPage() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
               disabled={!configAlignmentId || configExportBusy}
-              onClick={() => (configAlignmentId ? void loadFreqaiConfig(configAlignmentId) : undefined)}
+              onClick={() => (configAlignmentId ? void loadModelConfigFile(configAlignmentId) : undefined)}
               style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
             >
               {configExportBusy ? 'Loading…' : 'Load'}
             </button>
             <button
-              disabled={!freqaiConfigText.trim()}
+              disabled={!modelConfigFileText.trim()}
               onClick={() => {
-                const modelSlug = selectedModelId ? modelById.get(selectedModelId)?.slug ?? 'model' : 'model'
-                downloadTextFile(`freqai.${modelSlug}.config.json`, freqaiConfigText, 'application/json')
+                const filename = modelConfigFileName || 'config.json'
+                downloadTextFile(filename, modelConfigFileText, 'application/json')
               }}
               style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
             >
@@ -1226,9 +1229,9 @@ export default function CombinatorPage() {
             alignment: <span style={{ fontFamily: 'monospace' }}>{configAlignmentId || '—'}</span>
           </div>
           <textarea
-            value={freqaiConfigText}
+            value={modelConfigFileText}
             readOnly
-            placeholder={configAlignmentId ? 'Нажми Load чтобы получить freqai config…' : 'Выбери/создай alignment чтобы загрузить freqai config…'}
+            placeholder={configAlignmentId ? 'Нажми Load чтобы получить config.json…' : 'Выбери/создай alignment чтобы собрать config.json…'}
             rows={28}
             style={{ width: '100%', fontFamily: 'monospace' }}
           />
