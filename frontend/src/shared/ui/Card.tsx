@@ -4,10 +4,11 @@ export default function Card({ children }: { children: ReactNode }) {
   return (
     <div
       style={{
-        border: '1px solid #eee',
+        border: '1px solid var(--border)',
         borderRadius: 12,
         padding: 12,
-        background: '#fff',
+        background: 'var(--surface)',
+        color: 'var(--text)',
       }}
     >
       {children}

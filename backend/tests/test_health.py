@@ -7,4 +7,9 @@ def test_health_ok() -> None:
     client = TestClient(app)
     res = client.get("/health")
     assert res.status_code == 200
-    assert res.json() == {"status": "ok"}
+    data = res.json()
+    assert data["status"] in {"ok", "degraded"}
+    assert "checks" in data
+    assert set(data["checks"].keys()) >= {"postgres", "redis", "exchange"}
+    for k in ("postgres", "redis", "exchange"):
+        assert data["checks"][k]["status"] in {"ok", "down"}
