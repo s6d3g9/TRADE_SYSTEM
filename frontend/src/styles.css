@@ -1,10 +1,32 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap');
+
 html, body {
   height: 100%;
 }
 
+:root {
+  --bg: #0b1320;
+  --surface: #0f172a;
+  --surface-muted: #141c2a;
+  --border: #30415d;
+  --text: #e5e7eb;
+  --muted: #bfcbe5;
+
+  --text-muted-2: #7e8fb2;
+  --selected: #0b1320;
+  --chart-bg: #0b1320;
+
+  --pos: #0a7f2a;
+  --neg: #b00;
+  --up: #2ecc71;
+  --down: #e74c3c;
+}
+
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  font-family: 'Space Grotesk', 'Inter', 'SF Pro Text', 'Segoe UI', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
 }
 
 .container {
@@ -16,8 +38,9 @@ body {
 button {
   padding: 10px 14px;
   border-radius: 8px;
-  border: 1px solid #ccc;
-  background: #fff;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
   cursor: pointer;
 }
 
@@ -29,13 +52,13 @@ button:disabled {
 .card {
   margin-top: 16px;
   padding: 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fafafa;
+  background: var(--surface);
   overflow: auto;
 }
 
 .error {
-  border-color: #f0b4b4;
-  background: #fff5f5;
+  border-color: #b00;
+  background: var(--surface);
 }

@@ -21,6 +21,13 @@ export type NeuroProvider = {
   scope?: Record<string, unknown>
   defaults?: Record<string, unknown>
   mapping?: Record<string, unknown>
+  health_status?: string
+  last_seen_ts?: string | null
+  errors_5m?: number
+  latency_ms_avg?: number | null
+  stale_rate_5m?: number
+  created_at?: string
+  updated_at?: string
 }
 
 export async function listNeuroModules(): Promise<NeuroModule[]> {
@@ -37,4 +44,26 @@ export async function createNeuroProvider(p: NeuroProvider): Promise<NeuroProvid
 
 export async function getNeuroProvider(id: string): Promise<NeuroProvider> {
   return http<NeuroProvider>(`/neuro/providers/${encodeURIComponent(id)}`)
+}
+
+export async function updateNeuroProvider(p: NeuroProvider): Promise<NeuroProvider> {
+  return http<NeuroProvider>(`/neuro/providers/${encodeURIComponent(p.provider_id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(p),
+  })
+}
+
+export async function deleteNeuroProvider(id: string): Promise<{ deleted: boolean; provider_id: string }> {
+  return http(`/neuro/providers/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export async function getNeuroProviderHealth(id: string): Promise<{
+  provider_id: string
+  status: string
+  last_seen_ts: string | null
+  errors_5m: number
+  latency_ms_avg: number | null
+  stale_rate_5m: number
+}> {
+  return http(`/neuro/providers/${encodeURIComponent(id)}/health`)
 }
