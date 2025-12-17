@@ -176,6 +176,8 @@ export default function TerminalPage() {
     [timeframe],
   )
 
+  const width = 960
+
   useEffect(() => {
     let active = true
     const loadPairs = async () => {
@@ -329,6 +331,159 @@ export default function TerminalPage() {
     return Math.max(1, Math.min(bars, candles.length || bars))
   }, [visibleDays, barsPerDay, candles])
 
+  const plotWidth = width - 40
+
+  const windowEnd = useMemo(() => {
+    const count = Math.max(1, Math.min(visibleCount, candles.length || visibleCount))
+    const end = clamp(viewEndIndex || candles.length, count, candles.length)
+    return end
+  }, [candles.length, viewEndIndex, visibleCount])
+
+  const windowStart = useMemo(() => {
+    const count = Math.max(1, Math.min(visibleCount, candles.length || visibleCount))
+    return Math.max(0, windowEnd - count)
+  }, [candles.length, visibleCount, windowEnd])
+
+  const chartSvgRef = useRef<SVGSVGElement | null>(null)
+
+  const timeAnchors = useMemo(() => {
+    const day: number[] = []
+    const month: number[] = []
+    const year: number[] = []
+    if (!candles.length) return { day, month, year }
+
+    let lastKey = ''
+    let lastMonthKey = ''
+    let lastYearKey = ''
+    for (let i = 0; i < candles.length; i += 1) {
+      const d = new Date(candles[i].ts)
+      const y = d.getUTCFullYear()
+      const m = d.getUTCMonth() + 1
+      const dayNum = d.getUTCDate()
+      const key = `${y}-${String(m).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`
+      const monthKey = `${y}-${String(m).padStart(2, '0')}`
+      const yearKey = String(y)
+      if (i === 0 || key !== lastKey) {
+        day.push(i)
+        lastKey = key
+      }
+      if (i === 0 || monthKey !== lastMonthKey) {
+        month.push(i)
+        lastMonthKey = monthKey
+      }
+      if (i === 0 || yearKey !== lastYearKey) {
+        year.push(i)
+        lastYearKey = yearKey
+      }
+    }
+    return { day, month, year }
+  }, [candles])
+
+  const nearestAnchor = (anchors: number[], target: number) => {
+    if (!anchors.length) return clamp(target, 0, Math.max(0, candles.length - 1))
+    let lo = 0
+    let hi = anchors.length - 1
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi) / 2)
+      if (anchors[mid] < target) lo = mid + 1
+      else hi = mid
+    }
+    const right = anchors[lo]
+    const left = lo > 0 ? anchors[lo - 1] : right
+    return Math.abs(target - left) <= Math.abs(right - target) ? left : right
+  }
+
+  const setWindowToAnchor = (anchorIndex: number) => {
+    const count = Math.max(1, Math.min(visibleCount, candles.length || visibleCount))
+    const end = clamp(anchorIndex + count, count, candles.length)
+    setViewEndIndex(end)
+    setPinnedToEnd(end >= candles.length)
+  }
+
+  const xToPlot = (clientX: number) => {
+    const svg = chartSvgRef.current
+    if (!svg) return 0
+    const rect = svg.getBoundingClientRect()
+    if (!rect.width) return 0
+    const xInSvg = ((clientX - rect.left) / rect.width) * width
+    return clamp(xInSvg - 20, 0, plotWidth)
+  }
+
+  const plotToIndex = (xPlot: number) => {
+    if (candles.length <= 1) return 0
+    const ratio = clamp(xPlot / plotWidth, 0, 1)
+    return Math.round(ratio * (candles.length - 1))
+  }
+
+  const timeScaleDragRef = useRef<{
+    active: boolean
+    scale: 'day' | 'month' | 'year'
+    startX: number
+    startEnd: number
+    moved: boolean
+  }>({ active: false, scale: 'day', startX: 0, startEnd: 0, moved: false })
+
+  const onTimeScalePointerDown = (scale: 'day' | 'month' | 'year') => (e: React.PointerEvent) => {
+    e.stopPropagation()
+    const target = e.currentTarget as HTMLElement
+    try {
+      target.setPointerCapture(e.pointerId)
+    } catch {
+      // ignore
+    }
+    timeScaleDragRef.current = {
+      active: true,
+      scale,
+      startX: xToPlot(e.clientX),
+      startEnd: windowEnd,
+      moved: false,
+    }
+    setPinnedToEnd(false)
+  }
+
+  const onTimeScalePointerMove = (e: React.PointerEvent) => {
+    if (!timeScaleDragRef.current.active) return
+    e.stopPropagation()
+    const drag = timeScaleDragRef.current
+    const x = xToPlot(e.clientX)
+    const dx = x - drag.startX
+    if (Math.abs(dx) > 6) drag.moved = true
+
+    const stepPx = 60
+    const steps = Math.round(dx / stepPx)
+    if (!steps) return
+
+    const daysPerStep = drag.scale === 'day' ? 1 : drag.scale === 'month' ? 30 : 365
+    const barsDelta = steps * daysPerStep * barsPerDay
+    const count = Math.max(1, Math.min(visibleCount, candles.length || visibleCount))
+    const nextEnd = clamp(drag.startEnd - barsDelta, count, candles.length)
+    setViewEndIndex(nextEnd)
+    setPinnedToEnd(nextEnd >= candles.length)
+  }
+
+  const onTimeScalePointerUp = (e: React.PointerEvent) => {
+    if (!timeScaleDragRef.current.active) return
+    e.stopPropagation()
+    const target = e.currentTarget as HTMLElement
+    try {
+      target.releasePointerCapture(e.pointerId)
+    } catch {
+      // ignore
+    }
+
+    const drag = timeScaleDragRef.current
+    timeScaleDragRef.current.active = false
+
+    // Tap/click: jump to the nearest period start at that x.
+    if (!drag.moved) {
+      const xPlot = xToPlot(e.clientX)
+      const idx = plotToIndex(xPlot)
+      const anchors = drag.scale === 'day' ? timeAnchors.day : drag.scale === 'month' ? timeAnchors.month : timeAnchors.year
+      const anchor = nearestAnchor(anchors, idx)
+      setWindowToAnchor(anchor)
+    }
+  }
+
   useEffect(() => {
     setViewEndIndex((prev) => {
       const safePrev = Number.isFinite(prev) ? prev : 0
@@ -461,7 +616,6 @@ export default function TerminalPage() {
     setViewEndIndex(candles.length)
   }
 
-  const width = 960
   const mapX = (idx: number) => (idx / (visibleCandles.length - 1 || 1)) * width
 
   const timeTicks = useMemo(() => {
@@ -1167,7 +1321,7 @@ export default function TerminalPage() {
                 onDoubleClick={onChartDoubleClick}
                 title="Wheel = zoom time scale, drag = pan, double click = latest"
               >
-                <svg width="100%" viewBox={`0 0 ${width} ${priceHeight + 70}`} style={{ background: 'var(--chart-bg)', borderRadius: 12, padding: 12 }}>
+                <svg ref={chartSvgRef} width="100%" viewBox={`0 0 ${width} ${priceHeight + 70}`} style={{ background: 'var(--chart-bg)', borderRadius: 12, padding: 12 }}>
                   <g transform="translate(20 10)">
                     <rect x="0" y="0" width={width - 40} height={priceHeight} fill="url(#grad)" opacity={0.2} />
 
@@ -1254,6 +1408,28 @@ export default function TerminalPage() {
                           </text>
                         </g>
                       ))}
+                      <rect
+                        x={0}
+                        y={-2}
+                        width={width - 40}
+                        height={24}
+                        fill="transparent"
+                        style={{ cursor: 'grab' }}
+                        onPointerDown={onTimeScalePointerDown('year')}
+                        onPointerMove={onTimeScalePointerMove}
+                        onPointerUp={onTimeScalePointerUp}
+                        onPointerCancel={onTimeScalePointerUp}
+                      />
+                      {!!candles.length && (
+                        <rect
+                          x={(windowStart / Math.max(1, candles.length - 1)) * (width - 40)}
+                          y={-1}
+                          width={Math.max(2, ((windowEnd - windowStart) / Math.max(1, candles.length - 1)) * (width - 40))}
+                          height={2}
+                          fill="var(--selected)"
+                          opacity={0.85}
+                        />
+                      )}
                       <g transform="translate(0 24)">
                         <line x1="0" x2={width - 40} y1={0} y2={0} stroke="#30415d" strokeWidth={1} />
                         {timeTicks.monthTicks.map((t) => (
@@ -1264,6 +1440,28 @@ export default function TerminalPage() {
                             </text>
                           </g>
                         ))}
+                        <rect
+                          x={0}
+                          y={-2}
+                          width={width - 40}
+                          height={22}
+                          fill="transparent"
+                          style={{ cursor: 'grab' }}
+                          onPointerDown={onTimeScalePointerDown('month')}
+                          onPointerMove={onTimeScalePointerMove}
+                          onPointerUp={onTimeScalePointerUp}
+                          onPointerCancel={onTimeScalePointerUp}
+                        />
+                        {!!candles.length && (
+                          <rect
+                            x={(windowStart / Math.max(1, candles.length - 1)) * (width - 40)}
+                            y={-1}
+                            width={Math.max(2, ((windowEnd - windowStart) / Math.max(1, candles.length - 1)) * (width - 40))}
+                            height={2}
+                            fill="var(--selected)"
+                            opacity={0.85}
+                          />
+                        )}
                       </g>
                       <g transform="translate(0 46)">
                         <line x1="0" x2={width - 40} y1={0} y2={0} stroke="#30415d" strokeWidth={1} />
@@ -1275,6 +1473,28 @@ export default function TerminalPage() {
                             </text>
                           </g>
                         ))}
+                        <rect
+                          x={0}
+                          y={-2}
+                          width={width - 40}
+                          height={22}
+                          fill="transparent"
+                          style={{ cursor: 'grab' }}
+                          onPointerDown={onTimeScalePointerDown('day')}
+                          onPointerMove={onTimeScalePointerMove}
+                          onPointerUp={onTimeScalePointerUp}
+                          onPointerCancel={onTimeScalePointerUp}
+                        />
+                        {!!candles.length && (
+                          <rect
+                            x={(windowStart / Math.max(1, candles.length - 1)) * (width - 40)}
+                            y={-1}
+                            width={Math.max(2, ((windowEnd - windowStart) / Math.max(1, candles.length - 1)) * (width - 40))}
+                            height={2}
+                            fill="var(--selected)"
+                            opacity={0.85}
+                          />
+                        )}
                       </g>
                     </g>
                   </g>
