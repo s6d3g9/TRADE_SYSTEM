@@ -335,8 +335,7 @@ export default function TerminalPage() {
 
   const windowEnd = useMemo(() => {
     const count = Math.max(1, Math.min(visibleCount, candles.length || visibleCount))
-    const end = clamp(viewEndIndex || candles.length, count, candles.length)
-    return end
+    return clamp(viewEndIndex || candles.length, count, candles.length)
   }, [candles.length, viewEndIndex, visibleCount])
 
   const windowStart = useMemo(() => {
@@ -346,56 +345,137 @@ export default function TerminalPage() {
 
   const chartSvgRef = useRef<SVGSVGElement | null>(null)
 
-  const timeAnchors = useMemo(() => {
-    const day: number[] = []
-    const month: number[] = []
-    const year: number[] = []
-    if (!candles.length) return { day, month, year }
+  type Span = { key: string; label: string; start: number; end: number }
 
-    let lastKey = ''
-    let lastMonthKey = ''
-    let lastYearKey = ''
+  const yearSpans = useMemo<Span[]>(() => {
+    if (!candles.length) return []
+    const spans: Span[] = []
+    let curY: number | null = null
+    let curStart = 0
     for (let i = 0; i < candles.length; i += 1) {
+      const d = new Date(candles[i].ts)
+      const y = d.getUTCFullYear()
+      if (curY === null) {
+        curY = y
+        curStart = i
+        continue
+      }
+      if (y !== curY) {
+        spans.push({ key: String(curY), label: String(curY), start: curStart, end: i })
+        curY = y
+        curStart = i
+      }
+    }
+    if (curY !== null) spans.push({ key: String(curY), label: String(curY), start: curStart, end: candles.length })
+    return spans
+  }, [candles])
+
+  const [selectedYearKey, setSelectedYearKey] = useState<string | null>(null)
+  const [selectedMonthKey, setSelectedMonthKey] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!candles.length) {
+      setSelectedYearKey(null)
+      setSelectedMonthKey(null)
+      return
+    }
+    const lastTs = candles[candles.length - 1].ts
+    const d = new Date(lastTs)
+    const yKey = String(d.getUTCFullYear())
+    const mKey = `${yKey}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`
+    setSelectedYearKey((prev) => prev ?? yKey)
+    setSelectedMonthKey((prev) => prev ?? mKey)
+  }, [candles])
+
+  const selectedYearSpan = useMemo(() => {
+    if (!selectedYearKey) return yearSpans[yearSpans.length - 1] || null
+    return yearSpans.find((s) => s.key === selectedYearKey) || yearSpans[yearSpans.length - 1] || null
+  }, [selectedYearKey, yearSpans])
+
+  const monthSpans = useMemo<Span[]>(() => {
+    if (!candles.length || !selectedYearSpan) return []
+    const spans: Span[] = []
+    let curKey: string | null = null
+    let curStart = selectedYearSpan.start
+    for (let i = selectedYearSpan.start; i < selectedYearSpan.end; i += 1) {
+      const d = new Date(candles[i].ts)
+      const y = d.getUTCFullYear()
+      const m = d.getUTCMonth() + 1
+      const key = `${y}-${String(m).padStart(2, '0')}`
+      if (curKey === null) {
+        curKey = key
+        curStart = i
+        continue
+      }
+      if (key !== curKey) {
+        const monthLabel = d.toLocaleString('en-US', { month: 'short' })
+        spans.push({ key: curKey, label: monthLabel, start: curStart, end: i })
+        curKey = key
+        curStart = i
+      }
+    }
+    if (curKey) {
+      const d = new Date(candles[curStart].ts)
+      const monthLabel = d.toLocaleString('en-US', { month: 'short' })
+      spans.push({ key: curKey, label: monthLabel, start: curStart, end: selectedYearSpan.end })
+    }
+    return spans
+  }, [candles, selectedYearSpan])
+
+  const selectedMonthSpan = useMemo(() => {
+    if (!monthSpans.length) return null
+    if (selectedMonthKey) {
+      const found = monthSpans.find((m) => m.key === selectedMonthKey)
+      if (found) return found
+    }
+    return monthSpans[monthSpans.length - 1]
+  }, [monthSpans, selectedMonthKey])
+
+  useEffect(() => {
+    if (!selectedYearSpan) return
+    // If selected month is not inside selected year, reset to last month of that year.
+    setSelectedMonthKey((prev) => {
+      if (!prev) return monthSpans[monthSpans.length - 1]?.key ?? null
+      if (monthSpans.some((m) => m.key === prev)) return prev
+      return monthSpans[monthSpans.length - 1]?.key ?? null
+    })
+  }, [selectedYearSpan, monthSpans])
+
+  const daySpans = useMemo<Span[]>(() => {
+    if (!candles.length || !selectedMonthSpan) return []
+    const spans: Span[] = []
+    let curKey: string | null = null
+    let curStart = selectedMonthSpan.start
+    for (let i = selectedMonthSpan.start; i < selectedMonthSpan.end; i += 1) {
       const d = new Date(candles[i].ts)
       const y = d.getUTCFullYear()
       const m = d.getUTCMonth() + 1
       const dayNum = d.getUTCDate()
+      const dow = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'][d.getUTCDay()]
       const key = `${y}-${String(m).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`
-      const monthKey = `${y}-${String(m).padStart(2, '0')}`
-      const yearKey = String(y)
-      if (i === 0 || key !== lastKey) {
-        day.push(i)
-        lastKey = key
+      const label = `${String(dayNum).padStart(2, '0')} ${dow}`
+      if (curKey === null) {
+        curKey = key
+        curStart = i
+        spans.push({ key, label, start: i, end: i + 1 })
+        continue
       }
-      if (i === 0 || monthKey !== lastMonthKey) {
-        month.push(i)
-        lastMonthKey = monthKey
-      }
-      if (i === 0 || yearKey !== lastYearKey) {
-        year.push(i)
-        lastYearKey = yearKey
+      if (key !== curKey) {
+        spans.push({ key, label, start: i, end: i + 1 })
+        curKey = key
       }
     }
-    return { day, month, year }
-  }, [candles])
 
-  const nearestAnchor = (anchors: number[], target: number) => {
-    if (!anchors.length) return clamp(target, 0, Math.max(0, candles.length - 1))
-    let lo = 0
-    let hi = anchors.length - 1
-    while (lo < hi) {
-      const mid = Math.floor((lo + hi) / 2)
-      if (anchors[mid] < target) lo = mid + 1
-      else hi = mid
+    // Fix end boundaries (next span start)
+    for (let i = 0; i < spans.length; i += 1) {
+      spans[i].end = i + 1 < spans.length ? spans[i + 1].start : selectedMonthSpan.end
     }
-    const right = anchors[lo]
-    const left = lo > 0 ? anchors[lo - 1] : right
-    return Math.abs(target - left) <= Math.abs(right - target) ? left : right
-  }
+    return spans
+  }, [candles, selectedMonthSpan])
 
-  const setWindowToAnchor = (anchorIndex: number) => {
+  const setWindowToPeriodStart = (startIndex: number) => {
     const count = Math.max(1, Math.min(visibleCount, candles.length || visibleCount))
-    const end = clamp(anchorIndex + count, count, candles.length)
+    const end = clamp(startIndex + count, count, candles.length)
     setViewEndIndex(end)
     setPinnedToEnd(end >= candles.length)
   }
@@ -415,13 +495,33 @@ export default function TerminalPage() {
     return Math.round(ratio * (candles.length - 1))
   }
 
+  const spanContaining = (spans: Span[], idx: number) => {
+    if (!spans.length) return null
+    let lo = 0
+    let hi = spans.length - 1
+    while (lo <= hi) {
+      const mid = Math.floor((lo + hi) / 2)
+      const s = spans[mid]
+      if (idx < s.start) hi = mid - 1
+      else if (idx >= s.end) lo = mid + 1
+      else return s
+    }
+    return spans[spans.length - 1]
+  }
+
   const timeScaleDragRef = useRef<{
     active: boolean
     scale: 'day' | 'month' | 'year'
     startX: number
-    startEnd: number
     moved: boolean
-  }>({ active: false, scale: 'day', startX: 0, startEnd: 0, moved: false })
+    startWindowStart: number
+  }>({ active: false, scale: 'day', startX: 0, moved: false, startWindowStart: 0 })
+
+  const scaleSpans = (scale: 'day' | 'month' | 'year') => {
+    if (scale === 'year') return yearSpans
+    if (scale === 'month') return monthSpans
+    return daySpans
+  }
 
   const onTimeScalePointerDown = (scale: 'day' | 'month' | 'year') => (e: React.PointerEvent) => {
     e.stopPropagation()
@@ -435,8 +535,8 @@ export default function TerminalPage() {
       active: true,
       scale,
       startX: xToPlot(e.clientX),
-      startEnd: windowEnd,
       moved: false,
+      startWindowStart: windowStart,
     }
     setPinnedToEnd(false)
   }
@@ -445,20 +545,22 @@ export default function TerminalPage() {
     if (!timeScaleDragRef.current.active) return
     e.stopPropagation()
     const drag = timeScaleDragRef.current
-    const x = xToPlot(e.clientX)
-    const dx = x - drag.startX
+    const dx = xToPlot(e.clientX) - drag.startX
     if (Math.abs(dx) > 6) drag.moved = true
 
-    const stepPx = 60
-    const steps = Math.round(dx / stepPx)
+    const spans = scaleSpans(drag.scale)
+    if (!spans.length) return
+
+    const stepPx = 50
+    const steps = Math.trunc(dx / stepPx)
     if (!steps) return
 
-    const daysPerStep = drag.scale === 'day' ? 1 : drag.scale === 'month' ? 30 : 365
-    const barsDelta = steps * daysPerStep * barsPerDay
-    const count = Math.max(1, Math.min(visibleCount, candles.length || visibleCount))
-    const nextEnd = clamp(drag.startEnd - barsDelta, count, candles.length)
-    setViewEndIndex(nextEnd)
-    setPinnedToEnd(nextEnd >= candles.length)
+    const currentSpan = spanContaining(spans, drag.startWindowStart) || spans[0]
+    const currentIdx = spans.findIndex((s) => s.key === currentSpan.key)
+    if (currentIdx < 0) return
+
+    const nextIdx = clamp(currentIdx - steps, 0, spans.length - 1)
+    setWindowToPeriodStart(spans[nextIdx].start)
   }
 
   const onTimeScalePointerUp = (e: React.PointerEvent) => {
@@ -470,17 +572,25 @@ export default function TerminalPage() {
     } catch {
       // ignore
     }
-
     const drag = timeScaleDragRef.current
     timeScaleDragRef.current.active = false
 
-    // Tap/click: jump to the nearest period start at that x.
+    const spans = scaleSpans(drag.scale)
+    if (!spans.length) return
+
     if (!drag.moved) {
-      const xPlot = xToPlot(e.clientX)
-      const idx = plotToIndex(xPlot)
-      const anchors = drag.scale === 'day' ? timeAnchors.day : drag.scale === 'month' ? timeAnchors.month : timeAnchors.year
-      const anchor = nearestAnchor(anchors, idx)
-      setWindowToAnchor(anchor)
+      const idx = plotToIndex(xToPlot(e.clientX))
+      const s = spanContaining(spans, idx)
+      if (!s) return
+
+      if (drag.scale === 'year') {
+        setSelectedYearKey(s.key)
+        setSelectedMonthKey(null)
+      }
+      if (drag.scale === 'month') {
+        setSelectedMonthKey(s.key)
+      }
+      setWindowToPeriodStart(s.start)
     }
   }
 
@@ -1393,58 +1503,81 @@ export default function TerminalPage() {
                     ))}
 
                     <g transform={`translate(0 ${priceHeight + 20})`}>
-                      <line x1="0" x2={width - 40} y1={0} y2={0} stroke="#30415d" strokeWidth={1} />
-                      <text x={0} y={-6} fill="#bfcbe5" fontSize={10} textAnchor="start" opacity={0.9}>
-                        {visibleStartTs ? new Date(visibleStartTs).toISOString().slice(0, 10) : ''}
-                      </text>
-                      <text x={width - 40} y={-6} fill="#bfcbe5" fontSize={10} textAnchor="end" opacity={0.9}>
-                        {visibleEndTs ? new Date(visibleEndTs).toISOString().slice(0, 10) : ''}
-                      </text>
-                      {timeTicks.yearTicks.map((t) => (
-                        <g key={`y-${t.x}`}>
-                          <line x1={t.x} x2={t.x} y1={0} y2={10} stroke="#7e8fb2" strokeWidth={1} opacity={0.9} />
-                          <text x={t.x} y={22} fill="#bfcbe5" fontSize={10} textAnchor="middle" opacity={0.95}>
-                            {t.label}
-                          </text>
-                        </g>
-                      ))}
-                      <rect
-                        x={0}
-                        y={-2}
-                        width={width - 40}
-                        height={24}
-                        fill="transparent"
-                        style={{ cursor: 'grab' }}
-                        onPointerDown={onTimeScalePointerDown('year')}
-                        onPointerMove={onTimeScalePointerMove}
-                        onPointerUp={onTimeScalePointerUp}
-                        onPointerCancel={onTimeScalePointerUp}
-                      />
-                      {!!candles.length && (
+                      <rect x={0} y={-10} width={plotWidth} height={74} fill="var(--chart-bg)" opacity={0.9} />
+
+                      {/* YEAR SCALE (full history) */}
+                      <g>
+                        <rect x={0} y={0} width={plotWidth} height={20} fill="var(--surface)" opacity={0.35} />
+                        {yearSpans.map((s) => {
+                          const x0 = (s.start / Math.max(1, candles.length)) * plotWidth
+                          const x1 = (s.end / Math.max(1, candles.length)) * plotWidth
+                          const w = Math.max(2, x1 - x0)
+                          const active = selectedYearSpan?.key === s.key
+                          return (
+                            <g key={`ys-${s.key}`}>
+                              <rect x={x0} y={0} width={w} height={20} fill={active ? 'var(--selected)' : 'transparent'} opacity={active ? 0.55 : 1} />
+                              {w > 26 && (
+                                <text x={x0 + w / 2} y={14} fill="var(--text)" fontSize={10} textAnchor="middle" opacity={active ? 0.95 : 0.75}>
+                                  {s.label}
+                                </text>
+                              )}
+                            </g>
+                          )
+                        })}
                         <rect
-                          x={(windowStart / Math.max(1, candles.length - 1)) * (width - 40)}
-                          y={-1}
-                          width={Math.max(2, ((windowEnd - windowStart) / Math.max(1, candles.length - 1)) * (width - 40))}
+                          x={(windowStart / Math.max(1, candles.length)) * plotWidth}
+                          y={18}
+                          width={Math.max(2, ((windowEnd - windowStart) / Math.max(1, candles.length)) * plotWidth)}
                           height={2}
                           fill="var(--selected)"
-                          opacity={0.85}
+                          opacity={0.9}
                         />
-                      )}
-                      <g transform="translate(0 24)">
-                        <line x1="0" x2={width - 40} y1={0} y2={0} stroke="#30415d" strokeWidth={1} />
-                        {timeTicks.monthTicks.map((t) => (
-                          <g key={`m-${t.x}`}>
-                            <line x1={t.x} x2={t.x} y1={0} y2={8} stroke="#7e8fb2" strokeWidth={1} opacity={0.9} />
-                            <text x={t.x} y={18} fill="#bfcbe5" fontSize={10} textAnchor="middle" opacity={0.95}>
-                              {t.label}
-                            </text>
-                          </g>
-                        ))}
                         <rect
                           x={0}
-                          y={-2}
-                          width={width - 40}
-                          height={22}
+                          y={0}
+                          width={plotWidth}
+                          height={20}
+                          fill="transparent"
+                          style={{ cursor: 'grab' }}
+                          onPointerDown={onTimeScalePointerDown('year')}
+                          onPointerMove={onTimeScalePointerMove}
+                          onPointerUp={onTimeScalePointerUp}
+                          onPointerCancel={onTimeScalePointerUp}
+                        />
+                      </g>
+
+                      {/* MONTH SCALE (selected year) */}
+                      <g transform="translate(0 24)">
+                        <rect x={0} y={0} width={plotWidth} height={20} fill="var(--surface)" opacity={0.25} />
+                        {monthSpans.map((s) => {
+                          const x0 = (s.start / Math.max(1, candles.length)) * plotWidth
+                          const x1 = (s.end / Math.max(1, candles.length)) * plotWidth
+                          const w = Math.max(2, x1 - x0)
+                          const active = selectedMonthSpan?.key === s.key
+                          return (
+                            <g key={`ms-${s.key}`}>
+                              <rect x={x0} y={0} width={w} height={20} fill={active ? 'var(--selected)' : 'transparent'} opacity={active ? 0.55 : 1} />
+                              {w > 22 && (
+                                <text x={x0 + w / 2} y={14} fill="var(--text)" fontSize={10} textAnchor="middle" opacity={active ? 0.95 : 0.75}>
+                                  {s.label}
+                                </text>
+                              )}
+                            </g>
+                          )
+                        })}
+                        <rect
+                          x={(windowStart / Math.max(1, candles.length)) * plotWidth}
+                          y={18}
+                          width={Math.max(2, ((windowEnd - windowStart) / Math.max(1, candles.length)) * plotWidth)}
+                          height={2}
+                          fill="var(--selected)"
+                          opacity={0.9}
+                        />
+                        <rect
+                          x={0}
+                          y={0}
+                          width={plotWidth}
+                          height={20}
                           fill="transparent"
                           style={{ cursor: 'grab' }}
                           onPointerDown={onTimeScalePointerDown('month')}
@@ -1452,32 +1585,39 @@ export default function TerminalPage() {
                           onPointerUp={onTimeScalePointerUp}
                           onPointerCancel={onTimeScalePointerUp}
                         />
-                        {!!candles.length && (
-                          <rect
-                            x={(windowStart / Math.max(1, candles.length - 1)) * (width - 40)}
-                            y={-1}
-                            width={Math.max(2, ((windowEnd - windowStart) / Math.max(1, candles.length - 1)) * (width - 40))}
-                            height={2}
-                            fill="var(--selected)"
-                            opacity={0.85}
-                          />
-                        )}
                       </g>
-                      <g transform="translate(0 46)">
-                        <line x1="0" x2={width - 40} y1={0} y2={0} stroke="#30415d" strokeWidth={1} />
-                        {timeTicks.dayTicks.map((t) => (
-                          <g key={`d-${t.x}`}>
-                            <line x1={t.x} x2={t.x} y1={0} y2={8} stroke="#7e8fb2" strokeWidth={1} opacity={0.9} />
-                            <text x={t.x} y={18} fill="#bfcbe5" fontSize={10} textAnchor="middle" opacity={0.95}>
-                              {t.label}
-                            </text>
-                          </g>
-                        ))}
+
+                      {/* DAY SCALE (selected month; days count varies) */}
+                      <g transform="translate(0 48)">
+                        <rect x={0} y={0} width={plotWidth} height={20} fill="var(--surface)" opacity={0.18} />
+                        {daySpans.map((s) => {
+                          const x0 = (s.start / Math.max(1, candles.length)) * plotWidth
+                          const x1 = (s.end / Math.max(1, candles.length)) * plotWidth
+                          const w = Math.max(2, x1 - x0)
+                          return (
+                            <g key={`ds-${s.key}`}>
+                              <rect x={x0} y={0} width={w} height={20} fill="transparent" />
+                              {w > 26 && (
+                                <text x={x0 + w / 2} y={14} fill="var(--text)" fontSize={10} textAnchor="middle" opacity={0.7}>
+                                  {s.label}
+                                </text>
+                              )}
+                            </g>
+                          )
+                        })}
+                        <rect
+                          x={(windowStart / Math.max(1, candles.length)) * plotWidth}
+                          y={18}
+                          width={Math.max(2, ((windowEnd - windowStart) / Math.max(1, candles.length)) * plotWidth)}
+                          height={2}
+                          fill="var(--selected)"
+                          opacity={0.9}
+                        />
                         <rect
                           x={0}
-                          y={-2}
-                          width={width - 40}
-                          height={22}
+                          y={0}
+                          width={plotWidth}
+                          height={20}
                           fill="transparent"
                           style={{ cursor: 'grab' }}
                           onPointerDown={onTimeScalePointerDown('day')}
@@ -1485,16 +1625,6 @@ export default function TerminalPage() {
                           onPointerUp={onTimeScalePointerUp}
                           onPointerCancel={onTimeScalePointerUp}
                         />
-                        {!!candles.length && (
-                          <rect
-                            x={(windowStart / Math.max(1, candles.length - 1)) * (width - 40)}
-                            y={-1}
-                            width={Math.max(2, ((windowEnd - windowStart) / Math.max(1, candles.length - 1)) * (width - 40))}
-                            height={2}
-                            fill="var(--selected)"
-                            opacity={0.85}
-                          />
-                        )}
                       </g>
                     </g>
                   </g>
