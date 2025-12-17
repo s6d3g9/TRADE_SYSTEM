@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -27,8 +28,8 @@ class StrategyTemplateUpdate(StrategyTemplateBase):
 
 class StrategyTemplateOut(StrategyTemplateBase):
     strategy_id: str
-    created_at: str | None = None
-    updated_at: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class FreqAIModelVariantBase(BaseModel):
@@ -50,8 +51,8 @@ class FreqAIModelVariantUpdate(FreqAIModelVariantBase):
 
 class FreqAIModelVariantOut(FreqAIModelVariantBase):
     model_id: str
-    created_at: str | None = None
-    updated_at: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class StrategyAlignmentBase(BaseModel):
@@ -79,5 +80,5 @@ class StrategyAlignmentUpdate(StrategyAlignmentBase):
 
 class StrategyAlignmentOut(StrategyAlignmentBase):
     alignment_id: str
-    created_at: str | None = None
-    updated_at: str | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
