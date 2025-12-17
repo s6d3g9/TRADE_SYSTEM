@@ -121,3 +121,25 @@ export async function exportAlignment(alignment_id: string): Promise<{
 }> {
   return http(`/strategylab/alignments/${encodeURIComponent(alignment_id)}/export`)
 }
+
+export async function getStrategySource(strategy_id: string): Promise<{
+  strategy_id: string
+  strategy_class?: string | null
+  repo_url: string
+  ref?: string | null
+  path: string
+  filename: string
+  content: string
+}> {
+  return http(`/strategylab/strategies/${encodeURIComponent(strategy_id)}/source`)
+}
+
+export async function getAlignmentConfigFile(alignment_id: string): Promise<{
+  alignment_id: string
+  strategy: StrategyTemplate
+  model: FreqAIModelVariant
+  filename: string
+  config: Record<string, unknown>
+}> {
+  return http(`/strategylab/alignments/${encodeURIComponent(alignment_id)}/config-file`)
+}

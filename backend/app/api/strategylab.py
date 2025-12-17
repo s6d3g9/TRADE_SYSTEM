@@ -37,6 +37,16 @@ TASK_KEY_PREFIX = "trade:tasks:"
 _CLASS_RE = re.compile(r"^class\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*\((?P<bases>[^)]*)\)\s*:", re.MULTILINE)
 
 
+def _deep_merge(base: dict, override: dict) -> dict:
+    out: dict = dict(base)
+    for k, v in (override or {}).items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = _deep_merge(out[k], v)
+        else:
+            out[k] = v
+    return out
+
+
 def _slugify(value: str) -> str:
     v = value.strip().lower()
     v = re.sub(r"[^a-z0-9]+", "-", v)
@@ -84,6 +94,17 @@ def _detect_strategies(repo_root: Path, limit: int) -> list[tuple[str, str]]:
                 if len(hits) >= limit:
                     return hits
     return hits
+
+
+def _safe_repo_file(repo_root: Path, rel_path: str) -> Path:
+    rel = Path(rel_path)
+    if rel.is_absolute() or ".." in rel.parts:
+        raise HTTPException(status_code=400, detail="invalid repo_path")
+    p = (repo_root / rel).resolve()
+    root = repo_root.resolve()
+    if root not in p.parents and p != root:
+        raise HTTPException(status_code=400, detail="invalid repo_path")
+    return p
 
 
 @router.get("/strategies")
@@ -228,6 +249,74 @@ async def delete_strategy(strategy_id: str, session: AsyncSession = Depends(get_
     await session.delete(s)
     await session.commit()
     return {"deleted": True, "strategy_id": strategy_id}
+
+
+@router.get("/strategies/{strategy_id}/source")
+async def get_strategy_source(strategy_id: str, session: AsyncSession = Depends(get_db)) -> dict:
+    """Fetch and return the strategy .py source file from its git repo.
+
+    This supports the UX where "Strategy → Config" opens the actual strategy file (e.g. NostalgiaForInfinityX3.py).
+    """
+
+    s = await session.get(StrategyTemplate, strategy_id)
+    if not s:
+        raise HTTPException(status_code=404, detail="strategy not found")
+
+    repo_url = (s.source_url or "").strip()
+    ref = (s.source_ref or "").strip() or None
+    if not repo_url:
+        raise HTTPException(status_code=400, detail="strategy has no source_url")
+
+    with tempfile.TemporaryDirectory(prefix="strategylab_source_") as tmp:
+        repo_dir = Path(tmp) / "repo"
+
+        clone_cmd = ["git", "clone", "--depth", "1"]
+        if ref:
+            clone_cmd += ["--branch", ref]
+        clone_cmd += [repo_url, str(repo_dir)]
+
+        try:
+            subprocess.run(clone_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        except FileNotFoundError:
+            raise HTTPException(status_code=500, detail="git is not available in backend container")
+        except subprocess.CalledProcessError as e:
+            detail = (e.stderr or e.stdout or "git clone failed").strip()
+            raise HTTPException(status_code=400, detail=f"clone failed: {detail}")
+
+        rel_path = None
+        try:
+            rel_path = str((s.meta or {}).get("repo_path") or "").strip() or None
+        except Exception:
+            rel_path = None
+
+        if not rel_path and s.strategy_class:
+            detected = _detect_strategies(repo_dir, limit=200)
+            for class_name, path in detected:
+                if class_name == s.strategy_class:
+                    rel_path = path
+                    break
+
+        if not rel_path:
+            raise HTTPException(status_code=404, detail="strategy source path is unknown")
+
+        py = _safe_repo_file(repo_dir, rel_path)
+        if not py.exists() or not py.is_file():
+            raise HTTPException(status_code=404, detail=f"strategy file not found: {rel_path}")
+
+        try:
+            content = py.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            raise HTTPException(status_code=500, detail="failed to read strategy file")
+
+    return {
+        "strategy_id": s.strategy_id,
+        "strategy_class": s.strategy_class,
+        "repo_url": repo_url,
+        "ref": ref,
+        "path": rel_path,
+        "filename": py.name,
+        "content": content,
+    }
 
 
 @router.get("/models")
@@ -401,6 +490,77 @@ async def export_alignment(alignment_id: str, session: AsyncSession = Depends(ge
         "alignment": StrategyAlignmentOut.model_validate(a, from_attributes=True).model_dump(),
         "freqtrade": freqtrade_cfg,
         "freqai": freqai_cfg,
+    }
+
+
+@router.get("/alignments/{alignment_id}/config-file")
+async def alignment_config_file(alignment_id: str, session: AsyncSession = Depends(get_db)) -> dict:
+    """Generate a runnable Freqtrade config.json for a given alignment.
+
+    This supports the UX where "Model → Config" opens a ready-to-save config.json
+    (it includes both `strategy` and `freqai` sections).
+    """
+
+    a = await session.get(StrategyAlignment, alignment_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="alignment not found")
+    s = await session.get(StrategyTemplate, a.strategy_id)
+    m = await session.get(FreqAIModelVariant, a.model_id)
+    if not s or not m:
+        raise HTTPException(status_code=400, detail="alignment references missing strategy/model")
+
+    strategy_name = s.strategy_class or s.slug
+    freqai_base: dict = {
+        "enabled": True,
+        "identifier": m.slug,
+        "profile": a.profile or "default",
+    }
+
+    # If model.config already looks like a full freqai config chunk (feature/model params), merge it.
+    # Otherwise, treat it as model_training_parameters.
+    model_cfg = m.config or {}
+    if isinstance(model_cfg, dict) and any(k in model_cfg for k in ["feature_parameters", "data_split_parameters", "model_training_parameters"]):
+        freqai_base = _deep_merge(freqai_base, model_cfg)
+    elif isinstance(model_cfg, dict) and model_cfg:
+        freqai_base["model_training_parameters"] = model_cfg
+
+    # Alignment overrides
+    if isinstance(a.freqai_overrides, dict) and a.freqai_overrides:
+        freqai_base = _deep_merge(freqai_base, a.freqai_overrides)
+
+    base_cfg: dict = {
+        "$schema": "https://schema.freqtrade.io/schema.json",
+        "bot_name": "FreqAI_Bot",
+        "dry_run": True,
+        "dry_run_wallet": 1000,
+        "timeframe": "5m",
+        "max_open_trades": 3,
+        "stake_amount": "unlimited",
+        "stake_currency": "USDT",
+        "tradable_balance_ratio": 0.99,
+        "fiat_display_currency": "USD",
+        "exchange": {
+            "name": "bybit",
+            "key": "",
+            "secret": "",
+            "pair_whitelist": [],
+            "pair_blacklist": [],
+        },
+        "pairlists": [{"method": "StaticPairList"}],
+        "strategy": strategy_name,
+        "freqai": freqai_base,
+    }
+
+    cfg = base_cfg
+    if isinstance(a.freqtrade_overrides, dict) and a.freqtrade_overrides:
+        cfg = _deep_merge(cfg, a.freqtrade_overrides)
+
+    return {
+        "alignment_id": a.alignment_id,
+        "strategy": StrategyTemplateOut.model_validate(s, from_attributes=True).model_dump(),
+        "model": FreqAIModelVariantOut.model_validate(m, from_attributes=True).model_dump(),
+        "filename": "config.json",
+        "config": cfg,
     }
 
 
