@@ -14,6 +14,8 @@ import {
   deleteFreqAIModelVariant,
   deleteStrategyAlignment,
   deleteStrategyTemplate,
+  exportAlignment,
+  importStrategiesFromRepo,
   listFreqAIModelVariants,
   listStrategyAlignments,
   listStrategyTemplates,
@@ -134,6 +136,9 @@ export default function CombinatorPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
+
+  const [exportText, setExportText] = useState<string>('')
+  const [exportBusy, setExportBusy] = useState(false)
 
   const [selectedStrategyId, setSelectedStrategyId] = useState<string>('')
   const [selectedModelId, setSelectedModelId] = useState<string>('')
@@ -536,6 +541,61 @@ export default function CombinatorPage() {
     }
   }
 
+  async function importNfiStrategies() {
+    setBusy(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const res = await importStrategiesFromRepo({
+        repo_url: 'https://github.com/iterativv/NostalgiaForInfinity',
+        limit: 10,
+        tag: 'nfi',
+      })
+      setMessage(`Imported: ${res.imported.length}, skipped: ${res.skipped.length}, detected: ${res.detected}`)
+      await loadAll()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to import strategies')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function createDefaultXgboostModel() {
+    setBusy(true)
+    setError(null)
+    setMessage(null)
+    try {
+      await createFreqAIModelVariant({
+        slug: 'xgboost-default',
+        name: 'XGBoost (default)',
+        algorithm: 'xgboost',
+        config: { class: 'XGBoostRegressor' },
+        description: 'Default xgboost starter config',
+        tags: ['xgboost', 'default'],
+      })
+      setMessage('Model variant created: xgboost-default')
+      await loadAll()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to create model')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function loadExport(alignment_id: string) {
+    if (!alignment_id) return
+    setExportBusy(true)
+    setError(null)
+    try {
+      const res = await exportAlignment(alignment_id)
+      setExportText(JSON.stringify(res, null, 2))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to export')
+    } finally {
+      setExportBusy(false)
+    }
+  }
+
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <PageHeader
@@ -563,6 +623,16 @@ export default function CombinatorPage() {
       <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', alignItems: 'start' }}>
         <Card>
           <div style={{ fontWeight: 700, marginBottom: 8 }}>Strategy</div>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+            <button
+              disabled={busy}
+              onClick={() => void importNfiStrategies()}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+            >
+              Import NFI strategies
+            </button>
+          </div>
 
           {strategies.length === 0 ? (
             <EmptyState title="No strategies" hint="Добавьте стратегию (например NFI)" />
@@ -656,6 +726,16 @@ export default function CombinatorPage() {
 
         <Card>
           <div style={{ fontWeight: 700, marginBottom: 8 }}>Model</div>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+            <button
+              disabled={busy}
+              onClick={() => void createDefaultXgboostModel()}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+            >
+              Create XGBoost default
+            </button>
+          </div>
 
           {models.length === 0 ? (
             <EmptyState title="No model variants" hint="Добавьте вариант модели (например xgboost)" />
@@ -855,6 +935,22 @@ export default function CombinatorPage() {
                 Delete
               </button>
             </div>
+
+            {selectedAlignmentId ? (
+              <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <div style={{ fontWeight: 700 }}>Export (Freqtrade/FreqAI)</div>
+                  <button
+                    disabled={exportBusy}
+                    onClick={() => void loadExport(selectedAlignmentId)}
+                    style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+                  >
+                    {exportBusy ? 'Loading…' : 'Load'}
+                  </button>
+                </div>
+                <textarea value={exportText} readOnly rows={10} style={{ fontFamily: 'monospace' }} />
+              </div>
+            ) : null}
           </div>
         </Card>
       </div>

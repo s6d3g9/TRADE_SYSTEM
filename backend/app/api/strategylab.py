@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import json
+import re
+import subprocess
+import tempfile
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -28,6 +32,58 @@ router = APIRouter(prefix="/strategylab", tags=["strategylab"])
 
 QUEUE_KEY = "trade:tasks:queue"
 TASK_KEY_PREFIX = "trade:tasks:"
+
+
+_CLASS_RE = re.compile(r"^class\s+(?P<name>[A-Za-z_][A-Za-z0-9_]*)\s*\((?P<bases>[^)]*)\)\s*:", re.MULTILINE)
+
+
+def _slugify(value: str) -> str:
+    v = value.strip().lower()
+    v = re.sub(r"[^a-z0-9]+", "-", v)
+    v = re.sub(r"-+", "-", v).strip("-")
+    return v or "strategy"
+
+
+def _detect_strategies(repo_root: Path, limit: int) -> list[tuple[str, str]]:
+    """Return list of (class_name, relative_file_path)."""
+    hits: list[tuple[str, str]] = []
+    seen: set[str] = set()
+
+    # Freqtrade convention: user_data/strategies
+    preferred_dirs: list[Path] = []
+    for rel in [
+        Path("user_data") / "strategies",
+        Path("strategies"),
+        Path("user_data") / "strategies" / "NostalgiaForInfinity",
+    ]:
+        p = repo_root / rel
+        if p.exists() and p.is_dir():
+            preferred_dirs.append(p)
+
+    search_roots = preferred_dirs if preferred_dirs else [repo_root]
+    for root in search_roots:
+        for py in root.rglob("*.py"):
+            if py.name == "__init__.py":
+                continue
+            if "__pycache__" in py.parts:
+                continue
+            try:
+                text = py.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                continue
+            for m in _CLASS_RE.finditer(text):
+                name = m.group("name")
+                bases = m.group("bases")
+                if "IStrategy" not in bases:
+                    continue
+                if name in seen:
+                    continue
+                seen.add(name)
+                rel_path = str(py.relative_to(repo_root))
+                hits.append((name, rel_path))
+                if len(hits) >= limit:
+                    return hits
+    return hits
 
 
 @router.get("/strategies")
@@ -61,6 +117,77 @@ async def create_strategy(p: StrategyTemplateCreate, session: AsyncSession = Dep
 
     await session.refresh(s)
     return StrategyTemplateOut.model_validate(s, from_attributes=True).model_dump()
+
+
+@router.post("/strategies/import")
+async def import_strategies(payload: dict, session: AsyncSession = Depends(get_db)) -> dict:
+    """Import strategy templates by cloning a git repo and scanning for IStrategy classes.
+
+    NOTE: We only store metadata (class name + repo reference). We do NOT vendor strategy code.
+    """
+
+    repo_url = str(payload.get("repo_url") or "").strip()
+    ref = str(payload.get("ref") or "").strip() or None
+    limit = int(payload.get("limit") or 10)
+    tag = str(payload.get("tag") or "").strip() or None
+
+    if not repo_url:
+        raise HTTPException(status_code=400, detail="repo_url is required")
+    if limit < 1 or limit > 100:
+        raise HTTPException(status_code=400, detail="limit must be 1..100")
+
+    with tempfile.TemporaryDirectory(prefix="strategylab_import_") as tmp:
+        repo_dir = Path(tmp) / "repo"
+
+        clone_cmd = ["git", "clone", "--depth", "1"]
+        if ref:
+            clone_cmd += ["--branch", ref]
+        clone_cmd += [repo_url, str(repo_dir)]
+
+        try:
+            subprocess.run(clone_cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        except FileNotFoundError:
+            raise HTTPException(status_code=500, detail="git is not available in backend container")
+        except subprocess.CalledProcessError as e:
+            detail = (e.stderr or e.stdout or "git clone failed").strip()
+            raise HTTPException(status_code=400, detail=f"clone failed: {detail}")
+
+        detected = _detect_strategies(repo_dir, limit=limit)
+
+    imported: list[dict] = []
+    skipped: list[dict] = []
+
+    for class_name, rel_path in detected:
+        slug = _slugify(class_name)
+        tags = ["imported"]
+        if tag:
+            tags.append(tag)
+        meta = {
+            "repo_path": rel_path,
+            "source": "import",
+        }
+        s = StrategyTemplate(
+            strategy_id=str(uuid4()),
+            slug=slug,
+            name=class_name,
+            source_type="git",
+            source_url=repo_url,
+            source_ref=ref,
+            strategy_class=class_name,
+            description=None,
+            tags=tags,
+            meta=meta,
+        )
+        session.add(s)
+        try:
+            await session.commit()
+            await session.refresh(s)
+            imported.append(StrategyTemplateOut.model_validate(s, from_attributes=True).model_dump())
+        except IntegrityError:
+            await session.rollback()
+            skipped.append({"slug": slug, "name": class_name, "reason": "slug already exists"})
+
+    return {"imported": imported, "skipped": skipped, "detected": len(detected)}
 
 
 @router.put("/strategies/{strategy_id}")
@@ -242,6 +369,39 @@ async def delete_alignment(alignment_id: str, session: AsyncSession = Depends(ge
     await session.delete(a)
     await session.commit()
     return {"deleted": True, "alignment_id": alignment_id}
+
+
+@router.get("/alignments/{alignment_id}/export")
+async def export_alignment(alignment_id: str, session: AsyncSession = Depends(get_db)) -> dict:
+    """Return a normalized JSON payload to help sync UI data with Freqtrade/FreqAI configs."""
+    a = await session.get(StrategyAlignment, alignment_id)
+    if not a:
+        raise HTTPException(status_code=404, detail="alignment not found")
+    s = await session.get(StrategyTemplate, a.strategy_id)
+    m = await session.get(FreqAIModelVariant, a.model_id)
+    if not s or not m:
+        raise HTTPException(status_code=400, detail="alignment references missing strategy/model")
+
+    freqtrade_cfg = {
+        "strategy": s.strategy_class or s.slug,
+        **(a.freqtrade_overrides or {}),
+    }
+    freqai_cfg: dict = {
+        "profile": a.profile or "default",
+        "model": {"algorithm": m.algorithm, "config": m.config or {}},
+        "scope": a.scope,
+        "defaults": a.defaults,
+        "mapping": a.mapping,
+        **(a.freqai_overrides or {}),
+    }
+
+    return {
+        "strategy": StrategyTemplateOut.model_validate(s, from_attributes=True).model_dump(),
+        "model": FreqAIModelVariantOut.model_validate(m, from_attributes=True).model_dump(),
+        "alignment": StrategyAlignmentOut.model_validate(a, from_attributes=True).model_dump(),
+        "freqtrade": freqtrade_cfg,
+        "freqai": freqai_cfg,
+    }
 
 
 @router.post("/alignments/{alignment_id}/request-agent")

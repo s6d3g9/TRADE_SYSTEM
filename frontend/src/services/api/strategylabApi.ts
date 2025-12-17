@@ -102,3 +102,22 @@ export async function deleteStrategyAlignment(alignment_id: string): Promise<{ d
 export async function requestAgentAlignment(alignment_id: string): Promise<{ queued: boolean; task_id: string }> {
   return http(`/strategylab/alignments/${encodeURIComponent(alignment_id)}/request-agent`, { method: 'POST' })
 }
+
+export async function importStrategiesFromRepo(p: {
+  repo_url: string
+  ref?: string
+  limit?: number
+  tag?: string
+}): Promise<{ detected: number; imported: StrategyTemplate[]; skipped: Array<{ slug: string; name: string; reason: string }> }> {
+  return http(`/strategylab/strategies/import`, { method: 'POST', body: JSON.stringify(p) })
+}
+
+export async function exportAlignment(alignment_id: string): Promise<{
+  strategy: StrategyTemplate
+  model: FreqAIModelVariant
+  alignment: StrategyAlignment
+  freqtrade: Record<string, unknown>
+  freqai: Record<string, unknown>
+}> {
+  return http(`/strategylab/alignments/${encodeURIComponent(alignment_id)}/export`)
+}
