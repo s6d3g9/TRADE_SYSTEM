@@ -727,21 +727,23 @@ export default function CombinatorPage() {
             </label>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gap: 8, marginBottom: 10 }}>
             <div style={{ display: 'grid', gap: 2 }}>
               <div style={{ fontSize: 12, opacity: 0.8 }}>Selected</div>
               <div style={{ fontWeight: 700 }}>
                 {selectedStrategyId ? strategyById.get(selectedStrategyId)?.slug ?? selectedStrategyId : '—'}
               </div>
             </div>
-            <button
-              disabled={!selectedStrategyId || !configAlignmentId}
-              onClick={() => void openStrategyConfig()}
-              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
-              title={!configAlignmentId ? 'Нужен alignment (выбери или создай)' : undefined}
-            >
-              Config
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                disabled={!selectedStrategyId || !configAlignmentId}
+                onClick={() => void openStrategyConfig()}
+                style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+                title={!configAlignmentId ? 'Нужен alignment (выбери или создай)' : undefined}
+              >
+                Config
+              </button>
+            </div>
           </div>
 
           <div style={{ display: 'grid', gap: 10 }}>
@@ -863,21 +865,23 @@ export default function CombinatorPage() {
             </label>
           )}
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+          <div style={{ display: 'grid', gap: 8, marginBottom: 10 }}>
             <div style={{ display: 'grid', gap: 2 }}>
               <div style={{ fontSize: 12, opacity: 0.8 }}>Selected</div>
               <div style={{ fontWeight: 700 }}>
                 {selectedModelId ? modelById.get(selectedModelId)?.slug ?? selectedModelId : '—'}
               </div>
             </div>
-            <button
-              disabled={!selectedModelId || !configAlignmentId}
-              onClick={() => void openModelConfig()}
-              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
-              title={!configAlignmentId ? 'Нужен alignment (выбери или создай)' : undefined}
-            >
-              Config
-            </button>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                disabled={!selectedModelId || !configAlignmentId}
+                onClick={() => void openModelConfig()}
+                style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+                title={!configAlignmentId ? 'Нужен alignment (выбери или создай)' : undefined}
+              >
+                Config
+              </button>
+            </div>
           </div>
 
           <div style={{ display: 'grid', gap: 10 }}>
