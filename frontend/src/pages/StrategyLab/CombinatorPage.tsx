@@ -182,7 +182,7 @@ export default function CombinatorPage() {
 
   const configAlignmentId = useMemo(() => {
     if (selectedAlignmentId) return selectedAlignmentId
-    if (filteredAlignments.length === 1) return filteredAlignments[0].alignment_id
+    if (filteredAlignments.length >= 1) return filteredAlignments[0].alignment_id
     return ''
   }, [filteredAlignments, selectedAlignmentId])
 
@@ -654,6 +654,7 @@ export default function CombinatorPage() {
   }
 
   async function openStrategyConfig() {
+    setModelConfigBarOpen(false)
     setStrategyConfigBarOpen(true)
     if (!configAlignmentId) return
     if (configAlignmentId !== selectedAlignmentId) {
@@ -663,6 +664,7 @@ export default function CombinatorPage() {
   }
 
   async function openModelConfig() {
+    setStrategyConfigBarOpen(false)
     setModelConfigBarOpen(true)
     if (!configAlignmentId) return
     if (configAlignmentId !== selectedAlignmentId) {
@@ -736,10 +738,18 @@ export default function CombinatorPage() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button
-                disabled={!selectedStrategyId || !configAlignmentId}
                 onClick={() => void openStrategyConfig()}
-                style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  opacity: selectedStrategyId && configAlignmentId ? 0.95 : 0.6,
+                  cursor: selectedStrategyId && configAlignmentId ? 'pointer' : 'not-allowed',
+                }}
                 title={!configAlignmentId ? 'Нужен alignment (выбери или создай)' : undefined}
+                disabled={!selectedStrategyId || !configAlignmentId}
               >
                 Config
               </button>
@@ -874,10 +884,18 @@ export default function CombinatorPage() {
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button
-                disabled={!selectedModelId || !configAlignmentId}
                 onClick={() => void openModelConfig()}
-                style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  opacity: selectedModelId && configAlignmentId ? 0.95 : 0.6,
+                  cursor: selectedModelId && configAlignmentId ? 'pointer' : 'not-allowed',
+                }}
                 title={!configAlignmentId ? 'Нужен alignment (выбери или создай)' : undefined}
+                disabled={!selectedModelId || !configAlignmentId}
               >
                 Config
               </button>
@@ -1101,7 +1119,7 @@ export default function CombinatorPage() {
             <button
               disabled={!configAlignmentId || configExportBusy}
               onClick={() => (configAlignmentId ? void loadConfigFiles(configAlignmentId) : undefined)}
-              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
             >
               {configExportBusy ? 'Loading…' : 'Load'}
             </button>
@@ -1111,13 +1129,13 @@ export default function CombinatorPage() {
                 const strategySlug = selectedStrategyId ? strategyById.get(selectedStrategyId)?.slug ?? 'strategy' : 'strategy'
                 downloadTextFile(`freqtrade.${strategySlug}.config.json`, freqtradeConfigText, 'application/json')
               }}
-              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
             >
               Download
             </button>
             <button
               onClick={() => setStrategyConfigBarOpen(false)}
-              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
             >
               Close
             </button>
@@ -1169,7 +1187,7 @@ export default function CombinatorPage() {
             <button
               disabled={!configAlignmentId || configExportBusy}
               onClick={() => (configAlignmentId ? void loadConfigFiles(configAlignmentId) : undefined)}
-              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
             >
               {configExportBusy ? 'Loading…' : 'Load'}
             </button>
@@ -1179,13 +1197,13 @@ export default function CombinatorPage() {
                 const modelSlug = selectedModelId ? modelById.get(selectedModelId)?.slug ?? 'model' : 'model'
                 downloadTextFile(`freqai.${modelSlug}.config.json`, freqaiConfigText, 'application/json')
               }}
-              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
             >
               Download
             </button>
             <button
               onClick={() => setModelConfigBarOpen(false)}
-              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
             >
               Close
             </button>
