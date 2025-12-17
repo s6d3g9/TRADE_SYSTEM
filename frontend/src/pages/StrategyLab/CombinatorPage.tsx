@@ -638,39 +638,50 @@ export default function CombinatorPage() {
     }
   }
 
-  async function loadConfigFiles(alignment_id: string) {
+  async function loadFreqtradeConfig(alignment_id: string) {
     if (!alignment_id) return
     setConfigExportBusy(true)
     setError(null)
     try {
       const res = await exportAlignment(alignment_id)
       setFreqtradeConfigText(JSON.stringify(res.freqtrade ?? {}, null, 2))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to export freqtrade config file')
+    } finally {
+      setConfigExportBusy(false)
+    }
+  }
+
+  async function loadFreqaiConfig(alignment_id: string) {
+    if (!alignment_id) return
+    setConfigExportBusy(true)
+    setError(null)
+    try {
+      const res = await exportAlignment(alignment_id)
       setFreqaiConfigText(JSON.stringify(res.freqai ?? {}, null, 2))
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to export config files')
+      setError(e instanceof Error ? e.message : 'Failed to export freqai config file')
     } finally {
       setConfigExportBusy(false)
     }
   }
 
   async function openStrategyConfig() {
-    setModelConfigBarOpen(false)
     setStrategyConfigBarOpen(true)
     if (!configAlignmentId) return
     if (configAlignmentId !== selectedAlignmentId) {
       applyAlignmentSelection(configAlignmentId)
     }
-    await loadConfigFiles(configAlignmentId)
+    await loadFreqtradeConfig(configAlignmentId)
   }
 
   async function openModelConfig() {
-    setStrategyConfigBarOpen(false)
     setModelConfigBarOpen(true)
     if (!configAlignmentId) return
     if (configAlignmentId !== selectedAlignmentId) {
       applyAlignmentSelection(configAlignmentId)
     }
-    await loadConfigFiles(configAlignmentId)
+    await loadFreqaiConfig(configAlignmentId)
   }
 
   return (
@@ -1118,7 +1129,7 @@ export default function CombinatorPage() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
               disabled={!configAlignmentId || configExportBusy}
-              onClick={() => (configAlignmentId ? void loadConfigFiles(configAlignmentId) : undefined)}
+              onClick={() => (configAlignmentId ? void loadFreqtradeConfig(configAlignmentId) : undefined)}
               style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
             >
               {configExportBusy ? 'Loading…' : 'Load'}
@@ -1186,7 +1197,7 @@ export default function CombinatorPage() {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
               disabled={!configAlignmentId || configExportBusy}
-              onClick={() => (configAlignmentId ? void loadConfigFiles(configAlignmentId) : undefined)}
+              onClick={() => (configAlignmentId ? void loadFreqaiConfig(configAlignmentId) : undefined)}
               style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
             >
               {configExportBusy ? 'Loading…' : 'Load'}
