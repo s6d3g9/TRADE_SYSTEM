@@ -57,6 +57,9 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <NavLink to="/strategylab/freqai" style={linkStyle} onClick={onNavigate}>
         FreqAI
       </NavLink>
+      <NavLink to="/strategylab/combinator" style={linkStyle} onClick={onNavigate}>
+        Combinator
+      </NavLink>
 
       <div style={{ fontSize: 12, opacity: 0.7, margin: '12px 0 6px' }}>Agents</div>
       <NavLink to="/agents/overview" style={linkStyle} onClick={onNavigate}>
@@ -117,6 +120,9 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </NavLink>
       <NavLink to="/settings/integrations/execution-engines" style={linkStyle} onClick={onNavigate}>
         Execution Engines
+      </NavLink>
+      <NavLink to="/settings/integrations/freqtrade-freqai" style={linkStyle} onClick={onNavigate}>
+        Freqtrade/FreqAI
       </NavLink>
 
       <div style={{ fontSize: 12, opacity: 0.7, margin: '12px 0 6px' }}>Admin</div>

@@ -15,6 +15,7 @@ import StrategyDetailsPage from '../pages/StrategyLab/StrategyDetailsPage'
 import BacktestRunnerPage from '../pages/StrategyLab/BacktestRunnerPage'
 import OptimizePage from '../pages/StrategyLab/OptimizePage'
 import FreqAIPage from '../pages/StrategyLab/FreqAIPage'
+import CombinatorPage from '../pages/StrategyLab/CombinatorPage'
 
 import AgentsOverviewPage from '../pages/Agents/AgentsOverviewPage'
 import SupervisorPage from '../pages/Agents/SupervisorPage'
@@ -37,6 +38,7 @@ import TemplatesPage from '../pages/Settings/TemplatesPage'
 import NotificationsPage from '../pages/Settings/NotificationsPage'
 import NeuroModulesPage from '../pages/Settings/NeuroModulesPage'
 import ExecutionEnginesPage from '../pages/Settings/ExecutionEnginesPage'
+import FreqtradeFreqAIPage from '../pages/Settings/FreqtradeFreqAIPage'
 
 import UsersPage from '../pages/Admin/UsersPage'
 import MaintenancePage from '../pages/Admin/MaintenancePage'
@@ -60,6 +62,7 @@ export const router = createBrowserRouter([
       { path: '/strategylab/backtest', element: <BacktestRunnerPage /> },
       { path: '/strategylab/optimize', element: <OptimizePage /> },
       { path: '/strategylab/freqai', element: <FreqAIPage /> },
+      { path: '/strategylab/combinator', element: <CombinatorPage /> },
 
       { path: '/agents/overview', element: <AgentsOverviewPage /> },
       { path: '/agents/supervisor', element: <SupervisorPage /> },
@@ -82,6 +85,7 @@ export const router = createBrowserRouter([
       { path: '/settings/notifications', element: <NotificationsPage /> },
       { path: '/settings/integrations/neuro-modules', element: <NeuroModulesPage /> },
       { path: '/settings/integrations/execution-engines', element: <ExecutionEnginesPage /> },
+      { path: '/settings/integrations/freqtrade-freqai', element: <FreqtradeFreqAIPage /> },
 
       // TODO: Guard by role
       { path: '/admin/users', element: <UsersPage /> },
