@@ -77,6 +77,18 @@ function prettyJson(value: unknown): string {
   }
 }
 
+function downloadTextFile(filename: string, text: string, mime: string) {
+  const blob = new Blob([text], { type: mime })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 function toTagsArray(tags: string): string[] {
   return tags
     .split(',')
@@ -137,9 +149,11 @@ export default function CombinatorPage() {
   const [error, setError] = useState<string | null>(null)
   const [message, setMessage] = useState<string | null>(null)
 
-  const [exportText, setExportText] = useState<string>('')
-  const [exportBusy, setExportBusy] = useState(false)
-  const [configBarOpen, setConfigBarOpen] = useState(false)
+  const [strategyConfigBarOpen, setStrategyConfigBarOpen] = useState(false)
+  const [modelConfigBarOpen, setModelConfigBarOpen] = useState(false)
+  const [configExportBusy, setConfigExportBusy] = useState(false)
+  const [freqtradeConfigText, setFreqtradeConfigText] = useState<string>('')
+  const [freqaiConfigText, setFreqaiConfigText] = useState<string>('')
 
   const [selectedStrategyId, setSelectedStrategyId] = useState<string>('')
   const [selectedModelId, setSelectedModelId] = useState<string>('')
@@ -618,17 +632,18 @@ export default function CombinatorPage() {
     }
   }
 
-  async function loadExport(alignment_id: string) {
+  async function loadConfigFiles(alignment_id: string) {
     if (!alignment_id) return
-    setExportBusy(true)
+    setConfigExportBusy(true)
     setError(null)
     try {
       const res = await exportAlignment(alignment_id)
-      setExportText(JSON.stringify(res, null, 2))
+      setFreqtradeConfigText(JSON.stringify(res.freqtrade ?? {}, null, 2))
+      setFreqaiConfigText(JSON.stringify(res.freqai ?? {}, null, 2))
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to export')
+      setError(e instanceof Error ? e.message : 'Failed to export config files')
     } finally {
-      setExportBusy(false)
+      setConfigExportBusy(false)
     }
   }
 
@@ -658,7 +673,15 @@ export default function CombinatorPage() {
 
       <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', alignItems: 'start' }}>
         <Card>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>Strategy</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+            <div style={{ fontWeight: 700 }}>Strategy</div>
+            <button
+              onClick={() => setStrategyConfigBarOpen(true)}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+            >
+              Config
+            </button>
+          </div>
 
           <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
             <button
@@ -761,7 +784,15 @@ export default function CombinatorPage() {
         </Card>
 
         <Card>
-          <div style={{ fontWeight: 700, marginBottom: 8 }}>Model</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+            <div style={{ fontWeight: 700 }}>Model</div>
+            <button
+              onClick={() => setModelConfigBarOpen(true)}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+            >
+              Config
+            </button>
+          </div>
 
           <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
             <button
@@ -984,21 +1015,14 @@ export default function CombinatorPage() {
               >
                 Delete
               </button>
-
-              <button
-                disabled={!selectedAlignmentId}
-                onClick={() => setConfigBarOpen(true)}
-                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
-              >
-                Config bar
-              </button>
             </div>
           </div>
         </Card>
       </div>
 
+      {/* Strategy config file drawer (freqtrade) */}
       <div
-        aria-hidden={!configBarOpen}
+        aria-hidden={!strategyConfigBarOpen}
         style={{
           position: 'fixed',
           top: 0,
@@ -1007,7 +1031,7 @@ export default function CombinatorPage() {
           width: 'min(560px, 92vw)',
           background: 'var(--surface)',
           borderLeft: '1px solid var(--border)',
-          transform: configBarOpen ? 'translateX(0)' : 'translateX(100%)',
+          transform: strategyConfigBarOpen ? 'translateX(0)' : 'translateX(100%)',
           transition: 'transform 180ms ease',
           zIndex: 50,
           padding: 12,
@@ -1019,22 +1043,30 @@ export default function CombinatorPage() {
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div style={{ display: 'grid', gap: 2 }}>
-            <div style={{ fontWeight: 800 }}>Config</div>
-            <div style={{ fontSize: 12, opacity: 0.8 }}>
-              Export для синхронизации с Freqtrade/FreqAI (по выбранному alignment)
-            </div>
+            <div style={{ fontWeight: 800 }}>Strategy config file</div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>Freqtrade config JSON (по выбранному alignment)</div>
           </div>
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
-              disabled={!selectedAlignmentId || exportBusy}
-              onClick={() => (selectedAlignmentId ? void loadExport(selectedAlignmentId) : undefined)}
+              disabled={!selectedAlignmentId || configExportBusy}
+              onClick={() => (selectedAlignmentId ? void loadConfigFiles(selectedAlignmentId) : undefined)}
               style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
             >
-              {exportBusy ? 'Loading…' : 'Load'}
+              {configExportBusy ? 'Loading…' : 'Load'}
             </button>
             <button
-              onClick={() => setConfigBarOpen(false)}
+              disabled={!freqtradeConfigText.trim()}
+              onClick={() => {
+                const strategySlug = selectedStrategyId ? strategyById.get(selectedStrategyId)?.slug ?? 'strategy' : 'strategy'
+                downloadTextFile(`freqtrade.${strategySlug}.config.json`, freqtradeConfigText, 'application/json')
+              }}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+            >
+              Download
+            </button>
+            <button
+              onClick={() => setStrategyConfigBarOpen(false)}
               style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
             >
               Close
@@ -1047,9 +1079,77 @@ export default function CombinatorPage() {
             alignment: <span style={{ fontFamily: 'monospace' }}>{selectedAlignmentId || '—'}</span>
           </div>
           <textarea
-            value={exportText}
+            value={freqtradeConfigText}
             readOnly
-            placeholder={selectedAlignmentId ? 'Нажми Load чтобы получить JSON…' : 'Выбери alignment чтобы загрузить JSON…'}
+            placeholder={selectedAlignmentId ? 'Нажми Load чтобы получить freqtrade config…' : 'Выбери alignment чтобы загрузить freqtrade config…'}
+            rows={28}
+            style={{ width: '100%', fontFamily: 'monospace' }}
+          />
+        </div>
+      </div>
+
+      {/* Model config file drawer (freqai) */}
+      <div
+        aria-hidden={!modelConfigBarOpen}
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          height: '100vh',
+          width: 'min(560px, 92vw)',
+          background: 'var(--surface)',
+          borderLeft: '1px solid var(--border)',
+          transform: modelConfigBarOpen ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 180ms ease',
+          zIndex: 50,
+          padding: 12,
+          display: 'grid',
+          gridTemplateRows: 'auto 1fr',
+          gap: 10,
+          boxSizing: 'border-box',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ display: 'grid', gap: 2 }}>
+            <div style={{ fontWeight: 800 }}>Model config file</div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>FreqAI config JSON (по выбранному alignment)</div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              disabled={!selectedAlignmentId || configExportBusy}
+              onClick={() => (selectedAlignmentId ? void loadConfigFiles(selectedAlignmentId) : undefined)}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+            >
+              {configExportBusy ? 'Loading…' : 'Load'}
+            </button>
+            <button
+              disabled={!freqaiConfigText.trim()}
+              onClick={() => {
+                const modelSlug = selectedModelId ? modelById.get(selectedModelId)?.slug ?? 'model' : 'model'
+                downloadTextFile(`freqai.${modelSlug}.config.json`, freqaiConfigText, 'application/json')
+              }}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+            >
+              Download
+            </button>
+            <button
+              onClick={() => setModelConfigBarOpen(false)}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: 8, alignContent: 'start' }}>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>
+            alignment: <span style={{ fontFamily: 'monospace' }}>{selectedAlignmentId || '—'}</span>
+          </div>
+          <textarea
+            value={freqaiConfigText}
+            readOnly
+            placeholder={selectedAlignmentId ? 'Нажми Load чтобы получить freqai config…' : 'Выбери alignment чтобы загрузить freqai config…'}
             rows={28}
             style={{ width: '100%', fontFamily: 'monospace' }}
           />
