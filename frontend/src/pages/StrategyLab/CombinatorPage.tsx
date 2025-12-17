@@ -180,6 +180,12 @@ export default function CombinatorPage() {
     })
   }, [alignments, selectedModelId, selectedStrategyId])
 
+  const configAlignmentId = useMemo(() => {
+    if (selectedAlignmentId) return selectedAlignmentId
+    if (filteredAlignments.length === 1) return filteredAlignments[0].alignment_id
+    return ''
+  }, [filteredAlignments, selectedAlignmentId])
+
   async function loadAll() {
     setError(null)
     try {
@@ -647,6 +653,24 @@ export default function CombinatorPage() {
     }
   }
 
+  async function openStrategyConfig() {
+    setStrategyConfigBarOpen(true)
+    if (!configAlignmentId) return
+    if (configAlignmentId !== selectedAlignmentId) {
+      applyAlignmentSelection(configAlignmentId)
+    }
+    await loadConfigFiles(configAlignmentId)
+  }
+
+  async function openModelConfig() {
+    setModelConfigBarOpen(true)
+    if (!configAlignmentId) return
+    if (configAlignmentId !== selectedAlignmentId) {
+      applyAlignmentSelection(configAlignmentId)
+    }
+    await loadConfigFiles(configAlignmentId)
+  }
+
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <PageHeader
@@ -675,12 +699,6 @@ export default function CombinatorPage() {
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
             <div style={{ fontWeight: 700 }}>Strategy</div>
-            <button
-              onClick={() => setStrategyConfigBarOpen(true)}
-              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
-            >
-              Config
-            </button>
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -708,6 +726,23 @@ export default function CombinatorPage() {
               </select>
             </label>
           )}
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+            <div style={{ display: 'grid', gap: 2 }}>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Selected</div>
+              <div style={{ fontWeight: 700 }}>
+                {selectedStrategyId ? strategyById.get(selectedStrategyId)?.slug ?? selectedStrategyId : '—'}
+              </div>
+            </div>
+            <button
+              disabled={!selectedStrategyId || !configAlignmentId}
+              onClick={() => void openStrategyConfig()}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+              title={!configAlignmentId ? 'Нужен alignment (выбери или создай)' : undefined}
+            >
+              Config
+            </button>
+          </div>
 
           <div style={{ display: 'grid', gap: 10 }}>
             <label style={{ display: 'grid', gap: 4 }}>
@@ -786,12 +821,6 @@ export default function CombinatorPage() {
         <Card>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
             <div style={{ fontWeight: 700 }}>Model</div>
-            <button
-              onClick={() => setModelConfigBarOpen(true)}
-              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
-            >
-              Config
-            </button>
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
@@ -833,6 +862,23 @@ export default function CombinatorPage() {
               </select>
             </label>
           )}
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+            <div style={{ display: 'grid', gap: 2 }}>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Selected</div>
+              <div style={{ fontWeight: 700 }}>
+                {selectedModelId ? modelById.get(selectedModelId)?.slug ?? selectedModelId : '—'}
+              </div>
+            </div>
+            <button
+              disabled={!selectedModelId || !configAlignmentId}
+              onClick={() => void openModelConfig()}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+              title={!configAlignmentId ? 'Нужен alignment (выбери или создай)' : undefined}
+            >
+              Config
+            </button>
+          </div>
 
           <div style={{ display: 'grid', gap: 10 }}>
             <label style={{ display: 'grid', gap: 4 }}>
@@ -1049,8 +1095,8 @@ export default function CombinatorPage() {
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
-              disabled={!selectedAlignmentId || configExportBusy}
-              onClick={() => (selectedAlignmentId ? void loadConfigFiles(selectedAlignmentId) : undefined)}
+              disabled={!configAlignmentId || configExportBusy}
+              onClick={() => (configAlignmentId ? void loadConfigFiles(configAlignmentId) : undefined)}
               style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
             >
               {configExportBusy ? 'Loading…' : 'Load'}
@@ -1076,12 +1122,12 @@ export default function CombinatorPage() {
 
         <div style={{ display: 'grid', gap: 8, alignContent: 'start' }}>
           <div style={{ fontSize: 12, opacity: 0.8 }}>
-            alignment: <span style={{ fontFamily: 'monospace' }}>{selectedAlignmentId || '—'}</span>
+            alignment: <span style={{ fontFamily: 'monospace' }}>{configAlignmentId || '—'}</span>
           </div>
           <textarea
             value={freqtradeConfigText}
             readOnly
-            placeholder={selectedAlignmentId ? 'Нажми Load чтобы получить freqtrade config…' : 'Выбери alignment чтобы загрузить freqtrade config…'}
+            placeholder={configAlignmentId ? 'Нажми Load чтобы получить freqtrade config…' : 'Выбери/создай alignment чтобы загрузить freqtrade config…'}
             rows={28}
             style={{ width: '100%', fontFamily: 'monospace' }}
           />
@@ -1117,8 +1163,8 @@ export default function CombinatorPage() {
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <button
-              disabled={!selectedAlignmentId || configExportBusy}
-              onClick={() => (selectedAlignmentId ? void loadConfigFiles(selectedAlignmentId) : undefined)}
+              disabled={!configAlignmentId || configExportBusy}
+              onClick={() => (configAlignmentId ? void loadConfigFiles(configAlignmentId) : undefined)}
               style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
             >
               {configExportBusy ? 'Loading…' : 'Load'}
@@ -1144,12 +1190,12 @@ export default function CombinatorPage() {
 
         <div style={{ display: 'grid', gap: 8, alignContent: 'start' }}>
           <div style={{ fontSize: 12, opacity: 0.8 }}>
-            alignment: <span style={{ fontFamily: 'monospace' }}>{selectedAlignmentId || '—'}</span>
+            alignment: <span style={{ fontFamily: 'monospace' }}>{configAlignmentId || '—'}</span>
           </div>
           <textarea
             value={freqaiConfigText}
             readOnly
-            placeholder={selectedAlignmentId ? 'Нажми Load чтобы получить freqai config…' : 'Выбери alignment чтобы загрузить freqai config…'}
+            placeholder={configAlignmentId ? 'Нажми Load чтобы получить freqai config…' : 'Выбери/создай alignment чтобы загрузить freqai config…'}
             rows={28}
             style={{ width: '100%', fontFamily: 'monospace' }}
           />
