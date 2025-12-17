@@ -453,7 +453,7 @@ export default function TerminalPage() {
       const dayNum = d.getUTCDate()
       const dow = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'][d.getUTCDay()]
       const key = `${y}-${String(m).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`
-      const label = `${String(dayNum).padStart(2, '0')} ${dow}`
+      const label = `${dow}`
       if (curKey === null) {
         curKey = key
         curStart = i
@@ -1431,7 +1431,7 @@ export default function TerminalPage() {
                 onDoubleClick={onChartDoubleClick}
                 title="Wheel = zoom time scale, drag = pan, double click = latest"
               >
-                <svg ref={chartSvgRef} width="100%" viewBox={`0 0 ${width} ${priceHeight + 70}`} style={{ background: 'var(--chart-bg)', borderRadius: 12, padding: 12 }}>
+                <svg ref={chartSvgRef} width="100%" viewBox={`0 0 ${width} ${priceHeight + 102}`} style={{ background: 'var(--chart-bg)', borderRadius: 12, padding: 12 }}>
                   <g transform="translate(20 10)">
                     <rect x="0" y="0" width={width - 40} height={priceHeight} fill="url(#grad)" opacity={0.2} />
 
@@ -1505,19 +1505,18 @@ export default function TerminalPage() {
                     <g transform={`translate(0 ${priceHeight + 20})`}>
                       <rect x={0} y={-10} width={plotWidth} height={74} fill="var(--chart-bg)" opacity={0.9} />
 
-                      {/* YEAR SCALE (full history) */}
+                      {/* WEEKDAY/DAY SCALE (selected month; 7-day wheel labels) */}
                       <g>
                         <rect x={0} y={0} width={plotWidth} height={20} fill="var(--surface)" opacity={0.35} />
-                        {yearSpans.map((s) => {
+                        {daySpans.map((s) => {
                           const x0 = (s.start / Math.max(1, candles.length)) * plotWidth
                           const x1 = (s.end / Math.max(1, candles.length)) * plotWidth
                           const w = Math.max(2, x1 - x0)
-                          const active = selectedYearSpan?.key === s.key
                           return (
-                            <g key={`ys-${s.key}`}>
-                              <rect x={x0} y={0} width={w} height={20} fill={active ? 'var(--selected)' : 'transparent'} opacity={active ? 0.55 : 1} />
-                              {w > 26 && (
-                                <text x={x0 + w / 2} y={14} fill="var(--text)" fontSize={10} textAnchor="middle" opacity={active ? 0.95 : 0.75}>
+                            <g key={`ds-${s.key}`}>
+                              <rect x={x0} y={0} width={w} height={20} fill="transparent" />
+                              {w > 18 && (
+                                <text x={x0 + w / 2} y={14} fill="var(--text)" fontSize={10} textAnchor="middle" opacity={0.8}>
                                   {s.label}
                                 </text>
                               )}
@@ -1539,7 +1538,7 @@ export default function TerminalPage() {
                           height={20}
                           fill="transparent"
                           style={{ cursor: 'grab' }}
-                          onPointerDown={onTimeScalePointerDown('year')}
+                          onPointerDown={onTimeScalePointerDown('day')}
                           onPointerMove={onTimeScalePointerMove}
                           onPointerUp={onTimeScalePointerUp}
                           onPointerCancel={onTimeScalePointerUp}
@@ -1587,18 +1586,19 @@ export default function TerminalPage() {
                         />
                       </g>
 
-                      {/* DAY SCALE (selected month; days count varies) */}
+                      {/* YEAR SCALE (full history) */}
                       <g transform="translate(0 48)">
                         <rect x={0} y={0} width={plotWidth} height={20} fill="var(--surface)" opacity={0.18} />
-                        {daySpans.map((s) => {
+                        {yearSpans.map((s) => {
                           const x0 = (s.start / Math.max(1, candles.length)) * plotWidth
                           const x1 = (s.end / Math.max(1, candles.length)) * plotWidth
                           const w = Math.max(2, x1 - x0)
+                          const active = selectedYearSpan?.key === s.key
                           return (
-                            <g key={`ds-${s.key}`}>
-                              <rect x={x0} y={0} width={w} height={20} fill="transparent" />
+                            <g key={`ys-${s.key}`}>
+                              <rect x={x0} y={0} width={w} height={20} fill={active ? 'var(--selected)' : 'transparent'} opacity={active ? 0.55 : 1} />
                               {w > 26 && (
-                                <text x={x0 + w / 2} y={14} fill="var(--text)" fontSize={10} textAnchor="middle" opacity={0.7}>
+                                <text x={x0 + w / 2} y={14} fill="var(--text)" fontSize={10} textAnchor="middle" opacity={active ? 0.95 : 0.75}>
                                   {s.label}
                                 </text>
                               )}
@@ -1620,7 +1620,7 @@ export default function TerminalPage() {
                           height={20}
                           fill="transparent"
                           style={{ cursor: 'grab' }}
-                          onPointerDown={onTimeScalePointerDown('day')}
+                          onPointerDown={onTimeScalePointerDown('year')}
                           onPointerMove={onTimeScalePointerMove}
                           onPointerUp={onTimeScalePointerUp}
                           onPointerCancel={onTimeScalePointerUp}
