@@ -3,11 +3,11 @@
 Агенты используют этот файл для отслеживания микро-задач в рамках текущего Эпика.
 
 ## In Progress
-- [ ] Написать инструмент `RAGTool` для агента, чтобы он мог искать по базе `agent_memories`.
+- [ ] **Backend Models:** Привести все SQLAlchemy модели к единому стандарту (Base, TimestampMixin).
 
 ## Done
-- [x] Настроить базовый RAG-индексатор (`agents/indexer.py`).
-- [x] Переписать `agents/agent.py` (удалить старый код очереди, добавить структуру для Tool-calling агента).
-- [x] Провести аудит `backend/app/` на наличие пустых функций (`pass`, `...`) и удалить их.
-- [x] Инициализация Git-ветки `refactor/agent-architecture`.
-- [x] Замена `postgres:16-alpine` на `pgvector/pgvector:pg16`.
+- [x] **Backend Models:** Создан `TimestampMixin` в `backend/app/models/base.py` для автоматического отслеживания времени создания и обновления записей.
+- [x] **Backend Core:** Проведен аудит и рефакторинг `backend/app/core/config.py` (настройки приложения, валидация переменных окружения через Pydantic BaseSettings).
+- [x] **Backend Core:** Проведен аудит и рефакторинг `backend/app/core/db.py` (настройка асинхронного движка SQLAlchemy, пула соединений, сессий).
+- [x] Создана ветка `epic/core-refactoring` для глобального архитектурного рефакторинга.
+- [x] Обновлен `AGENT_PLAN.md` с дорожной картой рефакторинга (Core -> Models -> Services -> API -> Frontend).
