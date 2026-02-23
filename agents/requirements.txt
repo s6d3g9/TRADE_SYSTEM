@@ -1,2 +1,6 @@
 requests==2.32.3
 redis==5.0.8
+psycopg2-binary==2.9.9
+pgvector==0.2.5
+google-genai==0.3.0
+tiktoken==0.6.0

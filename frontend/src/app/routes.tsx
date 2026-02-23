@@ -2,6 +2,11 @@ import { Navigate, createBrowserRouter } from 'react-router-dom'
 
 import AppShell from './layout/AppShell'
 
+import LoginPage from '../pages/Auth/LoginPage'
+import AuthCallbackPage from '../pages/Auth/AuthCallbackPage'
+
+import ProfilePage from '../pages/Profile/ProfilePage'
+
 import OverviewPage from '../pages/Dashboard/OverviewPage'
 import LivePage from '../pages/Dashboard/LivePage'
 import AlertsPage from '../pages/Dashboard/AlertsPage'
@@ -15,7 +20,11 @@ import StrategyDetailsPage from '../pages/StrategyLab/StrategyDetailsPage'
 import BacktestRunnerPage from '../pages/StrategyLab/BacktestRunnerPage'
 import OptimizePage from '../pages/StrategyLab/OptimizePage'
 import FreqAIPage from '../pages/StrategyLab/FreqAIPage'
-import CombinatorPage from '../pages/StrategyLab/CombinatorPage'
+import CombinatorPage from '../pages/StrategyLab/CombinatorPageV2'
+import BacktestDetailPage from '../pages/StrategyLab/BacktestDetailPage'
+import BenchmarkPage from '../pages/StrategyLab/BenchmarkPage'
+import NodeGraphsPage from '../pages/StrategyLab/NodeGraphsPage'
+import UniversalEditorPage from '../pages/StrategyLab/UniversalEditorPage'
 
 import AgentsOverviewPage from '../pages/Agents/AgentsOverviewPage'
 import SupervisorPage from '../pages/Agents/SupervisorPage'
@@ -26,7 +35,11 @@ import MarketsPairsPage from '../pages/Data/MarketsPairsPage'
 import TradesSearchPage from '../pages/Data/TradesSearchPage'
 import ArtifactsPage from '../pages/Data/ArtifactsPage'
 
-import TerminalPage from '../pages/Charts/TerminalPage'
+import TerminalPage from '../pages/Charts/TerminalPageV2'
+import Terminal2Page from '../pages/Charts/Terminal2Page'
+
+import StoreGalleryPage from '../pages/Store/StoreGalleryPage'
+import StoreItemPage from '../pages/Store/StoreItemPage'
 
 import LogsViewerPage from '../pages/Logs/LogsViewerPage'
 import AuditTrailPage from '../pages/Logs/AuditTrailPage'
@@ -45,9 +58,19 @@ import MaintenancePage from '../pages/Admin/MaintenancePage'
 
 export const router = createBrowserRouter([
   {
+    path: '/login',
+    element: <LoginPage />,
+  },
+  {
+    path: '/auth/callback',
+    element: <AuthCallbackPage />,
+  },
+  {
     element: <AppShell />,
     children: [
       { path: '/', element: <Navigate to="/dashboard/overview" replace /> },
+
+      { path: '/profile', element: <ProfilePage /> },
 
       { path: '/dashboard/overview', element: <OverviewPage /> },
       { path: '/dashboard/live', element: <LivePage /> },
@@ -60,9 +83,15 @@ export const router = createBrowserRouter([
       { path: '/strategylab/strategies', element: <StrategiesListPage /> },
       { path: '/strategylab/strategies/:strategyName', element: <StrategyDetailsPage /> },
       { path: '/strategylab/backtest', element: <BacktestRunnerPage /> },
+      { path: '/strategylab/benchmark', element: <BenchmarkPage /> },
+      { path: '/strategylab/graphs', element: <NodeGraphsPage /> },
       { path: '/strategylab/optimize', element: <OptimizePage /> },
       { path: '/strategylab/freqai', element: <FreqAIPage /> },
       { path: '/strategylab/combinator', element: <CombinatorPage /> },
+      { path: '/strategylab/editor', element: <UniversalEditorPage /> },
+      { path: '/strategylab/editor/:scope/:id', element: <UniversalEditorPage /> },
+      { path: '/strategylab/editor/:scope/:id/:encodedPath', element: <UniversalEditorPage /> },
+      { path: '/strategylab/backtests/:backtestId', element: <BacktestDetailPage /> },
 
       { path: '/agents/overview', element: <AgentsOverviewPage /> },
       { path: '/agents/supervisor', element: <SupervisorPage /> },
@@ -74,6 +103,10 @@ export const router = createBrowserRouter([
       { path: '/data/artifacts', element: <ArtifactsPage /> },
 
       { path: '/charts/terminal', element: <TerminalPage /> },
+      { path: '/charts/terminal2', element: <Terminal2Page /> },
+
+      { path: '/store', element: <StoreGalleryPage /> },
+      { path: '/store/items/:itemId', element: <StoreItemPage /> },
 
       { path: '/logs/viewer', element: <LogsViewerPage /> },
       { path: '/logs/audit', element: <AuditTrailPage /> },

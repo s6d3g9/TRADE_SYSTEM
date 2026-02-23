@@ -1,0 +1,635 @@
+/* React Flow theme overrides using existing CSS variables */
+
+/* Standardized sizes for NodeGraphs overlays */
+.nodegraphs-canvasWrap {
+  --nodegraphs-flyout-left-width: 320px;
+  --nodegraphs-flyout-right-width: 360px;
+  --nodegraphs-chat-body-min-height: 240px;
+  --nodegraphs-chat-body-max-height: 280px;
+  --nodegraphs-chat-messages-max-height: 180px;
+  --nodegraphs-logs-list-max-height: 180px;
+  --nodegraphs-config-inline-height: 220px;
+  --nodegraphs-io-max-height: 220px;
+}
+
+.react-flow {
+  background: var(--bg);
+}
+
+.nodegraphs-rf .react-flow__pane {
+  cursor: default;
+}
+
+.nodegraphs-rf--panning .react-flow__pane {
+  cursor: grab;
+}
+
+.nodegraphs-rf--panning .react-flow__pane:active {
+  cursor: grabbing;
+}
+
+.react-flow__minimap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.nodegraphs-minimap {
+  margin-bottom: 52px;
+}
+
+.react-flow__controls button {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.react-flow__controls button:hover {
+  background: var(--surface-muted);
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+/* Nodes */
+.nodegraph-node {
+  min-width: 220px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.nodegraph-node--selected {
+  outline: 2px solid var(--border);
+  background: var(--selected);
+}
+
+.nodegraph-node__title {
+  font-weight: 700;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.nodegraph-node__subtitle {
+  font-size: 11px;
+  opacity: 0.75;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nodegraph-node__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--surface-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.nodegraph-node__headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nodegraph-node__titles {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nodegraph-node__icon {
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.95;
+}
+
+.nodegraph-node__body {
+  padding: 8px 10px;
+}
+
+.nodegraph-node__kind {
+  font-family: monospace;
+  font-size: 11px;
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.nodegraph-node__statusDot {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.nodegraph-node__statusDot--idle {
+  background: var(--surface);
+}
+
+.nodegraph-node__statusDot--warn {
+  background: var(--up);
+  opacity: 0.75;
+}
+
+.nodegraph-node__statusDot--ok {
+  background: var(--pos);
+  opacity: 0.9;
+}
+
+.nodegraph-node__statusDot--err {
+  background: var(--neg);
+  opacity: 0.9;
+}
+
+/* Handles */
+.react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.nodegraph-handle {
+  width: 10px;
+  height: 10px;
+}
+
+.nodegraph-handle--in {
+  left: -6px;
+}
+
+.nodegraph-handle--out {
+  right: -6px;
+}
+
+/* Modules palette */
+.nodegraphs-catalogSearch {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.nodegraphs-catalogCategoryTitle {
+  font-size: 11px;
+  opacity: 0.8;
+  font-weight: 700;
+  padding: 4px 2px;
+}
+
+.nodegraphs-catalogItem {
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.nodegraphs-catalogItem:hover {
+  background: var(--surface-muted);
+}
+
+.nodegraphs-catalogItemTitle {
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.nodegraphs-catalogItemKind {
+  font-size: 11px;
+  opacity: 0.7;
+  font-family: monospace;
+}
+
+/* Edges */
+.react-flow__edge-path {
+  stroke: var(--border);
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--text);
+}
+
+/* NodeGraphs page layout helpers */
+.nodegraphs-canvasWrap {
+  position: relative;
+  height: 520px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.nodegraphs-flyout {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: var(--nodegraphs-flyout-left-width);
+  z-index: 20;
+  overflow: auto;
+  padding: 6px;
+}
+
+.nodegraphs-flyout--collapsed {
+  bottom: auto;
+  height: 54px;
+  overflow: hidden;
+}
+
+.nodegraphs-flyout--left {
+  left: 0;
+}
+
+.nodegraphs-flyout--right {
+  right: 0;
+  width: var(--nodegraphs-flyout-right-width);
+}
+
+.nodegraphs-flyout--expanded {
+  left: 0;
+  right: 0;
+  width: auto;
+}
+
+.nodegraphs-flyoutTitle {
+  font-weight: 700;
+  padding: 6px 8px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  user-select: none;
+}
+
+.nodegraphs-flyoutTitle:hover {
+  background: var(--surface-muted);
+}
+
+.nodegraphs-flyoutTab {
+  position: absolute;
+  top: 0;
+  z-index: 15;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.nodegraphs-flyoutTab:hover {
+  background: var(--surface-muted);
+  opacity: 1;
+}
+
+.nodegraphs-flyoutTab--left {
+  left: 0;
+}
+
+.nodegraphs-flyoutTab--right {
+  right: 0;
+}
+
+.nodegraphs-chatTab {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 15;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.nodegraphs-chatTab:hover {
+  background: var(--surface-muted);
+  opacity: 1;
+}
+
+.nodegraphs-chatDock {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  padding: 6px;
+}
+
+.nodegraphs-chatDock > .ignore-key-press-canvas {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.nodegraphs-chatDockHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--surface);
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.nodegraphs-chatDockHeader:hover {
+  background: var(--surface-muted);
+}
+
+.nodegraphs-chatDockBody {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: var(--nodegraphs-chat-body-min-height);
+  max-height: var(--nodegraphs-chat-body-max-height);
+}
+
+.nodegraphs-chatDock--collapsed {
+  padding: 6px;
+}
+
+.nodegraphs-chatDock--collapsed .nodegraphs-chatDockHeader {
+  border-bottom: none;
+}
+
+.nodegraphs-chatDock--collapsed .nodegraphs-chatDockBody {
+  display: none;
+}
+
+.nodegraphs-chatCol,
+.nodegraphs-logsCol {
+  padding: 10px 12px;
+}
+
+.nodegraphs-logsCol {
+  border-left: 1px solid var(--border);
+}
+
+.nodegraphs-chatMessages {
+  display: grid;
+  gap: 8px;
+  max-height: var(--nodegraphs-chat-messages-max-height);
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.nodegraphs-chatMsg {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: var(--surface);
+}
+
+.nodegraphs-chatMsgRole {
+  font-size: 10px;
+  opacity: 0.7;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
+}
+
+.nodegraphs-chatMsgText {
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+
+.nodegraphs-chatInputRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  align-items: flex-start;
+}
+
+.nodegraphs-chatInput {
+  width: 100%;
+  resize: none;
+  overflow: auto;
+  font-family: monospace;
+  font-size: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.nodegraphs-logsList {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: auto;
+  max-height: var(--nodegraphs-logs-list-max-height);
+}
+
+.nodegraphs-logsRow {
+  display: grid;
+  grid-template-columns: 70px 1fr 90px;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.nodegraphs-logsRow:last-child {
+  border-bottom: none;
+}
+
+.nodegraphs-canvasWrap--chatOpen .react-flow__controls {
+  bottom: 308px;
+}
+
+.nodegraphs-canvasWrap--chatOpen .nodegraphs-minimap {
+  margin-bottom: 320px;
+}
+
+/* Config editor */
+.nodegraphs-configEditorFrame {
+  border-radius: 10px;
+  outline: none;
+}
+
+.nodegraphs-configEditorFrame:focus {
+  outline: 2px solid var(--border);
+}
+
+.nodegraphs-configTextarea {
+  width: 100%;
+  height: var(--nodegraphs-config-inline-height);
+  resize: vertical;
+  overflow: auto;
+  font-family: monospace;
+  font-size: 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  padding: 10px;
+  box-sizing: border-box;
+}
+
+.nodegraphs-ioBlock {
+  margin: 0;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: auto;
+  max-height: var(--nodegraphs-io-max-height);
+  font-size: 11px;
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* Fullscreen config editor overlay */
+.nodegraphs-configFullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  padding: 0;
+  background: var(--bg);
+}
+
+.nodegraphs-configFullscreenInner {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  box-sizing: border-box;
+  animation: nodegraphs-configsDrawerIn 140ms ease-out;
+}
+
+@keyframes nodegraphs-configsDrawerIn {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.nodegraphs-configsLayout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  grid-template-rows: 1fr 260px;
+  gap: 10px;
+}
+
+.nodegraphs-configsCol {
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  padding: 10px;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.nodegraphs-configsCol--left {
+  display: flex;
+  flex-direction: column;
+}
+
+.nodegraphs-configsCol--center {
+  display: flex;
+  flex-direction: column;
+}
+
+.nodegraphs-configsCol--left {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.nodegraphs-configsCol--center {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.nodegraphs-configsCol--chat {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.nodegraphs-configsList {
+  display: grid;
+  gap: 6px;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.nodegraphs-configsItem {
+  width: 100%;
+  text-align: left;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+.nodegraphs-configsItem:hover {
+  background: var(--selected);
+}
+
+.nodegraphs-configsItem--active {
+  background: var(--selected);
+}
+
+.nodegraphs-configFullscreenHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.nodegraphs-configTextarea--fullscreen {
+  flex: 1;
+  height: auto;
+  resize: none;
+}
+
+@media (max-width: 1100px) {
+  .nodegraphs-configsLayout {
+    grid-template-columns: 260px 1fr;
+    grid-template-rows: 1fr 220px;
+  }
+}

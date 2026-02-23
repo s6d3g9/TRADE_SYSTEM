@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import PageHeader from '../../shared/ui/PageHeader'
 import Card from '../../shared/ui/Card'
 import ErrorBanner from '../../shared/ui/ErrorBanner'
+import CollapsibleSection from '../../shared/ui/CollapsibleSection'
 import {
   listFreqAIModelVariants,
   listStrategyAlignments,
@@ -75,49 +76,72 @@ export default function OverviewPage() {
 
       {error ? <ErrorBanner message={error} onRetry={() => void load()} /> : null}
 
-      <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
-        <Card>
-          <div style={{ display: 'grid', gap: 10 }}>
-            <div style={{ fontWeight: 800 }}>Backend health</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-              <Stat label="Status" value={loading ? 'loading…' : healthSummary} />
-              <Stat
-                label="Exchange"
-                value={
-                  health?.checks?.exchange
-                    ? `${health.checks.exchange.status}${
-                        typeof health.checks.exchange.latency_ms === 'number' ? ` · ${health.checks.exchange.latency_ms}ms` : ''
-                      }`
-                    : '—'
-                }
-              />
-              <Stat
-                label="Postgres"
-                value={
-                  health?.checks?.postgres
-                    ? `${health.checks.postgres.status}${
-                        typeof health.checks.postgres.latency_ms === 'number' ? ` · ${health.checks.postgres.latency_ms}ms` : ''
-                      }`
-                    : '—'
-                }
-              />
-              <Stat
-                label="Redis"
-                value={
-                  health?.checks?.redis
-                    ? `${health.checks.redis.status}${
-                        typeof health.checks.redis.latency_ms === 'number' ? ` · ${health.checks.redis.latency_ms}ms` : ''
-                      }`
-                    : '—'
-                }
-              />
-            </div>
+      <div style={{ display: 'grid', gap: 12 }}>
+        <CollapsibleSection
+          title="Backend Health"
+          icon="🏥"
+          variant="card"
+          defaultExpanded={true}
+        >
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+            <Stat label="Status" value={loading ? 'loading…' : healthSummary} />
+            <Stat
+              label="Exchange"
+              value={
+                health?.checks?.exchange
+                  ? `${health.checks.exchange.status}${
+                      typeof health.checks.exchange.latency_ms === 'number' ? ` · ${health.checks.exchange.latency_ms}ms` : ''
+                    }`
+                  : '—'
+              }
+            />
+            <Stat
+              label="Postgres"
+              value={
+                health?.checks?.postgres
+                  ? `${health.checks.postgres.status}${
+                      typeof health.checks.postgres.latency_ms === 'number' ? ` · ${health.checks.postgres.latency_ms}ms` : ''
+                    }`
+                  : '—'
+              }
+            />
+            <Stat
+              label="Redis"
+              value={
+                health?.checks?.redis
+                  ? `${health.checks.redis.status}${
+                      typeof health.checks.redis.latency_ms === 'number' ? ` · ${health.checks.redis.latency_ms}ms` : ''
+                    }`
+                  : '—'
+              }
+            />
           </div>
-        </Card>
+        </CollapsibleSection>
 
-        <Card>
-          <div style={{ display: 'grid', gap: 10 }}>
-            <div style={{ fontWeight: 800 }}>StrategyLab catalog</div>
+        <CollapsibleSection
+          title="StrategyLab Catalog"
+          icon="📚"
+          variant="card"
+          defaultExpanded={true}
+          headerActions={
+            <button
+              onClick={() => void load()}
+              disabled={loading}
+              style={{
+                padding: '4px 12px',
+                borderRadius: 6,
+                border: '1px solid var(--border)',
+                background: 'var(--bg)',
+                color: 'var(--text)',
+                fontSize: 12,
+                cursor: loading ? 'not-allowed' : 'pointer',
+              }}
+            >
+              🔄 Refresh
+            </button>
+          }
+        >
+          <div style={{ display: 'grid', gap: 12 }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
               <Stat label="Strategies" value={strategyCount === null ? (loading ? '…' : '—') : String(strategyCount)} />
               <Stat label="Models" value={modelCount === null ? (loading ? '…' : '—') : String(modelCount)} />
@@ -125,18 +149,18 @@ export default function OverviewPage() {
             </div>
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <a href="/strategylab/combinator" style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}>
+              <a href="/strategylab/combinator" style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)', color: 'var(--text)', textDecoration: 'none', fontSize: 13 }}>
                 Open Combinator
               </a>
               <a
                 href="/settings/integrations/freqtrade-freqai"
-                style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+                style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border)', color: 'var(--text)', textDecoration: 'none', fontSize: 13 }}
               >
                 Freqtrade/FreqAI settings
               </a>
             </div>
           </div>
-        </Card>
+        </CollapsibleSection>
       </div>
     </div>
   )

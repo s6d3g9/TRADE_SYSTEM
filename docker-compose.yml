@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       - POSTGRES_DB=${POSTGRES_DB:-trade_system}
       - POSTGRES_USER=${POSTGRES_USER:-trade}
@@ -15,18 +15,66 @@ services:
     ports:
       - "${REDIS_PORT:-6379}:6379"
 
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+      - "${MAILPIT_WEB_PORT:-8025}:8025"
+
   backend:
     build:
       context: ./backend
+    restart: unless-stopped
     environment:
       - HOST=0.0.0.0
       - PORT=${BACKEND_PORT:-8000}
       - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://trade:trade@postgres:5432/trade_system}
       - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - FREQTRADE_USER_DATA=/freqtrade/user_data
+      - FREQTRADE_USER_DATA_HOST=/workspaces/TRADE_SYSTEM/freqtrade/user_data
+      - SMTP_HOST=${SMTP_HOST:-mailpit}
+      - SMTP_PORT=${SMTP_PORT:-1025}
+      - SMTP_STARTTLS=${SMTP_STARTTLS:-false}
+      - SMTP_FROM=${SMTP_FROM:-no-reply@trade-system.local}
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     volumes:
       - ./backend:/app
+      - ./freqtrade/user_data:/freqtrade/user_data
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - postgres
+      - redis
+      - mailpit
+
+  analysis-worker:
+    build:
+      context: ./backend
+    command: ["python", "-m", "app.workers.analysis_worker"]
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://trade:trade@postgres:5432/trade_system}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - FREQTRADE_USER_DATA=/freqtrade/user_data
+      - FREQTRADE_USER_DATA_HOST=/workspaces/TRADE_SYSTEM/freqtrade/user_data
+    volumes:
+      - ./backend:/app
+      - ./freqtrade/user_data:/freqtrade/user_data
+    depends_on:
+      - postgres
+      - redis
+
+  graph-worker:
+    build:
+      context: ./backend
+    command: ["python", "-m", "app.workers.graph_worker"]
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql+asyncpg://trade:trade@postgres:5432/trade_system}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
+      - FREQTRADE_USER_DATA=/freqtrade/user_data
+      - FREQTRADE_USER_DATA_HOST=/workspaces/TRADE_SYSTEM/freqtrade/user_data
+    volumes:
+      - ./backend:/app
+      - ./freqtrade/user_data:/freqtrade/user_data
     depends_on:
       - postgres
       - redis
@@ -34,6 +82,7 @@ services:
   frontend:
     build:
       context: ./frontend
+    restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-8090}:8080"
     depends_on:
@@ -51,5 +100,23 @@ services:
     volumes:
       - ./agents:/app
 
+  # Freqtrade for backtesting and trading
+  freqtrade:
+    image: freqtradeorg/freqtrade:stable
+    container_name: freqtrade
+    volumes:
+      - freqtrade_data:/freqtrade
+      - ./freqtrade/user_data:/freqtrade/user_data
+    ports:
+      - "${FREQTRADE_API_PORT:-8080}:8080"
+    command: >
+      trade
+      --config /freqtrade/user_data/config.json
+      --strategy SampleStrategy
+    restart: unless-stopped
+    depends_on:
+      - redis
+
 volumes:
   postgres_data:
+  freqtrade_data:

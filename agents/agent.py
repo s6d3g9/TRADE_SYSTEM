@@ -1,67 +1,76 @@
-import json
 import os
+import json
 import time
-from datetime import datetime, timezone
+from typing import Any, Dict, List
 
-from redis import Redis
+from tools.fs_tool import FileSystemTool
+from tools.git_tool import GitTool
+from tools.terminal_tool import TerminalTool
 
-QUEUE_KEY = "trade:tasks:queue"
-TASK_KEY_PREFIX = "trade:tasks:"
+# Это новый Stateless-агент, который использует инструменты (Tools) и файловую память.
+# Он не хранит состояние в БД, а читает AGENT_PLAN.md и TODO.md для понимания контекста.
 
+class ToolCallingAgent:
+    def __init__(self, workspace_dir: str = "/workspaces/TRADE_SYSTEM"):
+        self.workspace_dir = workspace_dir
+        self.plan_file = os.path.join(self.workspace_dir, "AGENT_PLAN.md")
+        self.todo_file = os.path.join(self.workspace_dir, "TODO.md")
+        
+        # Инициализация инструментов
+        self.fs = FileSystemTool(workspace_dir)
+        self.git = GitTool(workspace_dir)
+        self.terminal = TerminalTool(workspace_dir)
 
-def process_task(task_type: str, payload: dict) -> dict:
-    if task_type == "ping":
-        return {"ok": True, "echo": payload}
+    def read_memory(self) -> str:
+        """Чтение процедурной памяти (планов и задач)."""
+        memory = ""
+        if os.path.exists(self.plan_file):
+            with open(self.plan_file, "r", encoding="utf-8") as f:
+                memory += f"=== AGENT_PLAN.md ===\n{f.read()}\n\n"
+        if os.path.exists(self.todo_file):
+            with open(self.todo_file, "r", encoding="utf-8") as f:
+                memory += f"=== TODO.md ===\n{f.read()}\n\n"
+        return memory
 
-    return {"ok": False, "error": f"unknown task type: {task_type}"}
+    def update_todo(self, new_content: str) -> None:
+        """Обновление файла задач (запись в память)."""
+        with open(self.todo_file, "w", encoding="utf-8") as f:
+            f.write(new_content)
 
+    def execute_tool(self, tool_name: str, kwargs: Dict[str, Any]) -> Any:
+        """Выполнение инструмента."""
+        print(f"[Agent] Executing tool: {tool_name} with args: {kwargs}")
+        
+        if tool_name == "read_file":
+            return self.fs.read_file(kwargs.get("path", ""))
+        elif tool_name == "write_file":
+            return self.fs.write_file(kwargs.get("path", ""), kwargs.get("content", ""))
+        elif tool_name == "run_command":
+            return self.terminal.run_command(kwargs.get("command", ""))
+        elif tool_name == "git_status":
+            return self.git.status()
+        elif tool_name == "git_commit":
+            return self.git.commit(kwargs.get("message", ""))
+        else:
+            return {"status": "error", "message": f"Unknown tool: {tool_name}"}
 
-def main() -> None:
-    redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-    r = Redis.from_url(redis_url, decode_responses=True)
-
-    print(f"[agent] connected to redis: {redis_url}")
-    while True:
-        try:
-            item = r.blpop(QUEUE_KEY, timeout=5)
-            if not item:
-                continue
-
-            _, task_id = item
-            key = f"{TASK_KEY_PREFIX}{task_id}"
-            task = r.hgetall(key)
-            if not task:
-                continue
-
-            r.hset(
-                key,
-                mapping={
-                    "status": "running",
-                    "started_at": datetime.now(timezone.utc).isoformat(),
-                },
-            )
-
-            payload_raw = task.get("payload") or "{}"
-            try:
-                payload = json.loads(payload_raw)
-            except Exception:  # noqa: BLE001
-                payload = {"_raw": payload_raw}
-
-            result = process_task(task.get("type", ""), payload)
-
-            r.hset(
-                key,
-                mapping={
-                    "status": "done" if result.get("ok") else "error",
-                    "finished_at": datetime.now(timezone.utc).isoformat(),
-                    "result": json.dumps(result, ensure_ascii=False),
-                },
-            )
-            print(f"[agent] processed {task_id}: {result}")
-        except Exception as e:  # noqa: BLE001
-            print(f"[agent] worker error: {e}")
-            time.sleep(1)
-
+    def run(self, task_prompt: str) -> None:
+        """Основной цикл работы агента."""
+        print(f"[Agent] Starting task: {task_prompt}")
+        
+        # 1. Чтение памяти (контекста)
+        context = self.read_memory()
+        print(f"[Agent] Loaded context ({len(context)} chars).")
+        
+        # 2. Здесь должен быть вызов LLM (например, OpenAI API) с передачей context и task_prompt
+        # LLM вернет список инструментов для вызова (Tool Calling)
+        print("[Agent] Thinking... (LLM call placeholder)")
+        
+        # 3. Выполнение инструментов (пример)
+        # self.execute_tool("read_file", {"path": "backend/app/main.py"})
+        
+        print("[Agent] Task completed.")
 
 if __name__ == "__main__":
-    main()
+    agent = ToolCallingAgent()
+    agent.run("Проверь TODO.md и выполни следующую задачу.")

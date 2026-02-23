@@ -5,7 +5,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+# Canonical Exchange type definition - single source of truth
 Exchange = Literal["binance", "okx", "bybit", "kraken", "coinbase"]
+
+# All supported exchanges list for validation/iteration
+SUPPORTED_EXCHANGES: list[str] = ["binance", "okx", "bybit", "kraken", "coinbase"]
 
 
 class CandleOut(BaseModel):

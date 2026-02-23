@@ -1,0 +1,160 @@
+{
+  "max_open_trades": 3,
+  "stake_currency": "USDT",
+  "stake_amount": "unlimited",
+  "tradable_balance_ratio": 0.99,
+  "fiat_display_currency": "USD",
+  "dry_run": true,
+  "dry_run_wallet": 1000,
+  "cancel_open_orders_on_exit": false,
+  "trading_mode": "spot",
+  "margin_mode": "",
+  "unfilledtimeout": {
+    "entry": 10,
+    "exit": 10,
+    "exit_timeout_count": 0,
+    "unit": "minutes"
+  },
+  "entry_pricing": {
+    "price_side": "same",
+    "use_order_book": true,
+    "order_book_top": 1,
+    "price_last_balance": 0.0,
+    "check_depth_of_market": {
+      "enabled": false,
+      "bids_to_ask_delta": 1
+    }
+  },
+  "exit_pricing": {
+    "price_side": "same",
+    "use_order_book": true,
+    "order_book_top": 1
+  },
+  "exchange": {
+    "name": "binance",
+    "key": "",
+    "secret": "",
+    "ccxt_config": {},
+    "ccxt_async_config": {},
+    "pair_whitelist": [
+      "BTC/USDT",
+      "ETH/USDT",
+      "BNB/USDT"
+    ],
+    "pair_blacklist": [
+      "BNB/.*"
+    ]
+  },
+  "pairlists": [
+    {
+      "method": "StaticPairList"
+    }
+  ],
+  "edge": {
+    "enabled": false
+  },
+  "strategy": "NostalgiaForInfinityX3",
+  "strategy_path": "/freqtrade/user_data/strategies",
+  "freqai": {
+    "enabled": true,
+    "purge_old_models": 2,
+    "train_period_days": 30,
+    "backtest_period_days": 7,
+    "identifier": "nostalgiaforinfinityx3_xgboost_advanced",
+    "feature_parameters": {
+      "include_timeframes": [
+        "5m",
+        "15m",
+        "1h"
+      ],
+      "include_corr_pairlist": [],
+      "label_period_candles": 24,
+      "include_shifted_candles": 2,
+      "DI_threshold": 0,
+      "weight_factor": 0,
+      "principal_component_analysis": false,
+      "use_SVM_to_remove_outliers": true,
+      "stratify_training_data": 0,
+      "indicator_periods_candles": [
+        10,
+        20,
+        50
+      ]
+    },
+    "data_split_parameters": {
+      "test_size": 0.33,
+      "random_state": 1
+    },
+    "model_training_parameters": {
+      "n_estimators": 1000,
+      "learning_rate": 0.02,
+      "task_type": "CPU",
+      "model": "XGBoostRegressor",
+      "enabled": true,
+      "model_save_type": "stable",
+      "feature_parameters": {
+        "include_timeframes": [
+          "5m",
+          "15m",
+          "1h",
+          "4h"
+        ],
+        "include_corr_pairlist": [
+          "BTC/USDT",
+          "ETH/USDT"
+        ],
+        "label_period_candles": 24,
+        "include_shifted_candles": 3,
+        "DI_threshold": 0.95,
+        "weight_factor": 0.95,
+        "principal_component_analysis": true,
+        "use_SVM_to_remove_outliers": true,
+        "svm_params": {
+          "shuffle": false,
+          "nu": 0.1
+        },
+        "indicator_periods_candles": [
+          10,
+          20,
+          50,
+          100,
+          200
+        ]
+      },
+      "data_split_parameters": {
+        "test_size": 0.25,
+        "random_state": 42,
+        "shuffle": false
+      },
+      "model_training_parameters": {
+        "n_estimators": 1000,
+        "learning_rate": 0.05,
+        "max_depth": 10,
+        "min_child_weight": 3,
+        "subsample": 0.9,
+        "colsample_bytree": 0.9,
+        "gamma": 0.1,
+        "reg_alpha": 0.1,
+        "reg_lambda": 1.0,
+        "random_state": 42
+      },
+      "freqai": {
+        "feature_parameters": {
+          "indicator_list": [
+            "ema",
+            "rsi",
+            "macd"
+          ]
+        },
+        "train_period_days": 180,
+        "model_training_parameters": {
+          "n_estimators": 100,
+          "max_depth": 10
+        },
+        "label_parameters": {
+          "label_period_candles": 36
+        }
+      }
+    }
+  }
+}

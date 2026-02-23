@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, DateTime, ForeignKey, String, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
+
+if TYPE_CHECKING:
+    from app.models.trading import Bot, Backtest
 
 
 class StrategyTemplate(Base):
@@ -81,3 +85,87 @@ class StrategyAlignment(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+    # Relationships
+    bots: Mapped[list["Bot"]] = relationship("Bot", back_populates="alignment", lazy="noload")
+    backtests: Mapped[list["Backtest"]] = relationship("Backtest", back_populates="alignment", lazy="noload")
+
+
+class ConfigFile(Base):
+    """Версионированные конфигурации для стратегий, моделей и сонастроек.
+    
+    Поддерживает:
+    - regime: bull, bear, flat, regular (режим рынка)
+    - kind: base, variant (тип конфига)
+    - parent_config_id: ссылка на базовый конфиг (для вариаций)
+    """
+    __tablename__ = "config_files"
+    __table_args__ = (
+        Index("ix_config_files_scope_owner", "scope", "owner_id"),
+        Index("ix_config_files_owner_active", "scope", "owner_id", "is_active"),
+        Index("ix_config_files_regime", "regime"),
+        Index("ix_config_files_kind", "kind"),
+    )
+
+    config_id: Mapped[str] = mapped_column(String, primary_key=True)
+    scope: Mapped[str] = mapped_column(String, nullable=False)  # strategy, model, alignment
+    owner_id: Mapped[str] = mapped_column(String, nullable=False)  # strategy_id, model_id, alignment_id
+    name: Mapped[str] = mapped_column(String, nullable=False, server_default="config.json")
+    content: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default="false")
+
+    # Новые поля согласно README_DATA_STORAGE_STRATEGIES.md
+    regime: Mapped[str] = mapped_column(String, nullable=False, server_default="regular")  # bull, bear, flat, regular
+    kind: Mapped[str] = mapped_column(String, nullable=False, server_default="base")  # base, variant
+    parent_config_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("config_files.config_id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    # Self-referential relationship для дерева base → variants
+    parent: Mapped["ConfigFile | None"] = relationship(
+        "ConfigFile", remote_side="ConfigFile.config_id", back_populates="variants", lazy="selectin"
+    )
+    variants: Mapped[list["ConfigFile"]] = relationship(
+        "ConfigFile", back_populates="parent", lazy="noload"
+    )
+
+    # Materialized tabular parameters for this config version
+    params: Mapped[list["ConfigParam"]] = relationship(
+        "ConfigParam", back_populates="config_file", lazy="noload", cascade="all, delete-orphan"
+    )
+
+
+class ConfigParam(Base):
+    """Materialized (path,value) rows for a specific ConfigFile version.
+
+    The UI can use these rows for table editing and diffing.
+    """
+
+    __tablename__ = "config_params"
+    __table_args__ = (
+        UniqueConstraint("config_id", "path", name="uq_config_params_config_path"),
+        Index("ix_config_params_config", "config_id"),
+        Index("ix_config_params_path", "path"),
+    )
+
+    param_id: Mapped[str] = mapped_column(String, primary_key=True)
+    config_id: Mapped[str] = mapped_column(
+        String, ForeignKey("config_files.config_id", ondelete="CASCADE"), nullable=False
+    )
+
+    # Dot-path (dict only). Arrays are stored as JSON leaf values.
+    path: Mapped[str] = mapped_column(String, nullable=False)
+    value: Mapped[object] = mapped_column(JSON, nullable=False)
+    value_type: Mapped[str] = mapped_column(String, nullable=False, server_default="json")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    config_file: Mapped["ConfigFile"] = relationship("ConfigFile", back_populates="params", lazy="selectin")

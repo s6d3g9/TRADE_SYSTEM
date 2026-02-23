@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import math
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Any
 
 import httpx
 
-Exchange = Literal["binance", "okx", "bybit", "kraken", "coinbase"]
+from app.core.redis import get_redis
+from app.schemas.market import Exchange
 
 # Normalized timeframe identifiers we support.
 # Note: sub-minute candles are only supported for Binance via trade aggregation.
@@ -259,10 +261,28 @@ PAIR_KINDS: dict[str, list[str]] = {pair: ["perp", "spot"] for pair in SYMBOL_MA
 
 
 def resolve_symbol(normalized: str, exchange: Exchange) -> str:
+    """Convert normalized pair (e.g. BTC/USDT) to exchange-native symbol.
+    
+    Uses SYMBOL_MAP for curated pairs, then algorithmic fallback for discovery pairs.
+    Fallback templates match /market/rules endpoint logic.
+    """
     if normalized in SYMBOL_MAP and exchange in SYMBOL_MAP[normalized]:
         return SYMBOL_MAP[normalized][exchange]
-    # fallback: if user already passed exchange native symbol
-    return normalized.replace("/", "")
+    
+    # Algorithmic fallback for discovery pairs
+    if "/" in normalized:
+        base, quote = normalized.split("/", 1)
+        if exchange in {"binance", "bybit"}:
+            return f"{base}{quote}"
+        elif exchange in {"okx", "coinbase"}:
+            return f"{base}-{quote}"
+        elif exchange == "kraken":
+            # Kraken has complex legacy mappings (XBT vs BTC, etc); non-algorithmic.
+            # For now, attempt naive format and let exchange API error if wrong.
+            return f"{base}{quote}"
+    
+    # If already native format or unsupported, return as-is
+    return normalized
 
 
 async def fetch_binance(pair: str, tf: str, limit: int = 200) -> list[Candle]:
@@ -403,3 +423,254 @@ def align_and_average(series: dict[Exchange, list[Candle]]) -> list[Candle]:
 
 def now_ts_ms() -> int:
     return int(datetime.now(timezone.utc).timestamp() * 1000)
+
+
+async def _redis_get(key: str) -> str | None:
+    try:
+        return await get_redis().get(key)
+    except Exception:
+        return None
+
+
+async def _redis_set(key: str, value: str, *, ttl_sec: int) -> None:
+    try:
+        await get_redis().set(key, value, ex=ttl_sec)
+    except Exception:
+        return
+
+
+async def _binance_exchange_info() -> dict[str, Any]:
+    cache_key = "market:binance:exchange_info:v1"
+    cached = await _redis_get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    url = "https://api.binance.com/api/v3/exchangeInfo"
+    async with httpx.AsyncClient(timeout=15) as client:
+        res = await client.get(url)
+        res.raise_for_status()
+        data = res.json()
+
+    await _redis_set(cache_key, json.dumps(data), ttl_sec=60 * 60)
+    return data
+
+
+async def _binance_ticker_24h() -> list[dict[str, Any]]:
+    cache_key = "market:binance:ticker_24h:v1"
+    cached = await _redis_get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    url = "https://api.binance.com/api/v3/ticker/24hr"
+    async with httpx.AsyncClient(timeout=15) as client:
+        res = await client.get(url)
+        res.raise_for_status()
+        data = res.json()
+
+    # Keep short TTL; 24h ticker changes frequently.
+    await _redis_set(cache_key, json.dumps(data), ttl_sec=5)
+    return data
+
+
+async def _binance_futures_exchange_info() -> dict[str, Any]:
+    cache_key = "market:binance:futures:exchange_info:v1"
+    cached = await _redis_get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    url = "https://fapi.binance.com/fapi/v1/exchangeInfo"
+    async with httpx.AsyncClient(timeout=15) as client:
+        res = await client.get(url)
+        res.raise_for_status()
+        data = res.json()
+
+    await _redis_set(cache_key, json.dumps(data), ttl_sec=60 * 60)
+    return data
+
+
+async def _binance_futures_ticker_24h() -> list[dict[str, Any]]:
+    cache_key = "market:binance:futures:ticker_24h:v1"
+    cached = await _redis_get(cache_key)
+    if cached:
+        return json.loads(cached)
+
+    url = "https://fapi.binance.com/fapi/v1/ticker/24hr"
+    async with httpx.AsyncClient(timeout=15) as client:
+        res = await client.get(url)
+        res.raise_for_status()
+        data = res.json()
+
+    await _redis_set(cache_key, json.dumps(data), ttl_sec=5)
+    return data
+
+
+async def discover_binance_spot_pairs(
+    *,
+    quote: str = "USDT",
+    search: str | None = None,
+    limit: int = 500,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """Discover Binance spot pairs from exchange metadata + attach 24h ticker stats.
+
+    Returns the same shape as /market/pairs items so the frontend can switch sources.
+    """
+    quote = (quote or "USDT").upper()
+    search_norm = (search or "").strip().upper()
+    offset = max(0, int(offset))
+    limit = max(1, min(int(limit), 5000))
+
+    info = await _binance_exchange_info()
+    symbols = info.get("symbols") or []
+    meta: list[tuple[str, str, str]] = []
+    for s in symbols:
+        try:
+            if s.get("status") != "TRADING":
+                continue
+            if not s.get("isSpotTradingAllowed", True):
+                continue
+            if s.get("quoteAsset") != quote:
+                continue
+            base = str(s.get("baseAsset") or "").upper()
+            q = str(s.get("quoteAsset") or "").upper()
+            sym = str(s.get("symbol") or "")
+            if not base or not q or not sym:
+                continue
+
+            norm_pair = f"{base}/{q}"
+            if search_norm and (search_norm not in base and search_norm not in norm_pair and search_norm not in sym.upper()):
+                continue
+            meta.append((norm_pair, sym, q))
+        except Exception:
+            continue
+
+    ticker = await _binance_ticker_24h()
+    tick_map: dict[str, dict[str, Any]] = {}
+    for row in ticker:
+        sym = row.get("symbol")
+        if isinstance(sym, str) and sym:
+            tick_map[sym] = row
+
+    enriched: list[dict[str, Any]] = []
+    for norm_pair, sym, q in meta:
+        t = tick_map.get(sym) or {}
+        last: float | None = None
+        change24h_pct: float | None = None
+        volume24h_quote: float = 0.0
+        try:
+            if "lastPrice" in t:
+                last = float(t["lastPrice"])
+        except Exception:
+            last = None
+        try:
+            if "priceChangePercent" in t:
+                change24h_pct = float(t["priceChangePercent"])
+        except Exception:
+            change24h_pct = None
+        try:
+            if "quoteVolume" in t:
+                volume24h_quote = float(t["quoteVolume"])
+        except Exception:
+            volume24h_quote = 0.0
+
+        enriched.append(
+            {
+                "pair": norm_pair,
+                "exchanges": ["binance"],
+                "symbols": {"binance": sym},
+                "kinds": ["spot"],
+                "last": last,
+                "change24hPct": change24h_pct,
+                "volume24hQuote": volume24h_quote,
+            }
+        )
+
+    # sort by volume desc to make UI usable by default
+    enriched.sort(key=lambda x: float(x.get("volume24hQuote") or 0.0), reverse=True)
+    return enriched[offset : offset + limit]
+
+
+async def discover_binance_perp_pairs(
+    *,
+    quote: str = "USDT",
+    search: str | None = None,
+    limit: int = 500,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """Discover Binance perpetual futures pairs.
+
+    Uses Binance Futures exchangeInfo + 24h ticker. Returns the same shape as spot discovery.
+    """
+    quote = (quote or "USDT").upper()
+    search_norm = (search or "").strip().upper()
+    offset = max(0, int(offset))
+    limit = max(1, min(int(limit), 5000))
+
+    info = await _binance_futures_exchange_info()
+    symbols = info.get("symbols") or []
+    meta: list[tuple[str, str, str]] = []
+    for s in symbols:
+        try:
+            if s.get("status") != "TRADING":
+                continue
+            # Only perpetual contracts.
+            if str(s.get("contractType") or "").upper() != "PERPETUAL":
+                continue
+            if s.get("quoteAsset") != quote:
+                continue
+            base = str(s.get("baseAsset") or "").upper()
+            q = str(s.get("quoteAsset") or "").upper()
+            sym = str(s.get("symbol") or "")
+            if not base or not q or not sym:
+                continue
+
+            norm_pair = f"{base}/{q}"
+            if search_norm and (search_norm not in base and search_norm not in norm_pair and search_norm not in sym.upper()):
+                continue
+            meta.append((norm_pair, sym, q))
+        except Exception:
+            continue
+
+    ticker = await _binance_futures_ticker_24h()
+    tick_map: dict[str, dict[str, Any]] = {}
+    for row in ticker:
+        sym = row.get("symbol")
+        if isinstance(sym, str) and sym:
+            tick_map[sym] = row
+
+    enriched: list[dict[str, Any]] = []
+    for norm_pair, sym, q in meta:
+        t = tick_map.get(sym) or {}
+        last: float | None = None
+        change24h_pct: float | None = None
+        volume24h_quote: float = 0.0
+        try:
+            if "lastPrice" in t:
+                last = float(t["lastPrice"])
+        except Exception:
+            last = None
+        try:
+            if "priceChangePercent" in t:
+                change24h_pct = float(t["priceChangePercent"])
+        except Exception:
+            change24h_pct = None
+        try:
+            if "quoteVolume" in t:
+                volume24h_quote = float(t["quoteVolume"])
+        except Exception:
+            volume24h_quote = 0.0
+
+        enriched.append(
+            {
+                "pair": norm_pair,
+                "exchanges": ["binance"],
+                "symbols": {"binance": sym},
+                "kinds": ["perp"],
+                "last": last,
+                "change24hPct": change24h_pct,
+                "volume24hQuote": volume24h_quote,
+            }
+        )
+
+    enriched.sort(key=lambda x: float(x.get("volume24hQuote") or 0.0), reverse=True)
+    return enriched[offset : offset + limit]

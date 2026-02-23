@@ -7,6 +7,8 @@
 - `agents/` — python-воркер (пример: периодически дергает `/health`)
 - `postgres` / `redis` — инфраструктура в `docker-compose.yml`
 
+Документация по модели данных и хранению (DSS): [README_DATA_STORAGE_STRATEGIES.md](README_DATA_STORAGE_STRATEGIES.md).
+
 ## Быстрый старт
 
 1) (опционально) Создай `.env` на основе примера:
@@ -24,7 +26,7 @@ docker compose up --build
 ## Проверка
 
 - Backend: `http://localhost:8000/health`
-- Frontend: `http://localhost:8080` (ссылкой ведёт на `/api/health`)
+- Frontend: `http://localhost:8090` (ссылкой ведёт на `/api/health`)
 
 ## Миграции
 

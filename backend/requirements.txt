@@ -8,3 +8,7 @@ redis==5.0.8
 pydantic==2.10.3
 psycopg2-binary==2.9.10
 httpx==0.27.2
+python-jose[cryptography]==3.3.0
+email-validator==2.2.0
+mnemonic==0.21
+argon2-cffi==23.1.0

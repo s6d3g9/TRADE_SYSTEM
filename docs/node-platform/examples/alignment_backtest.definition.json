@@ -1,0 +1,50 @@
+{
+  "nodes": [
+    {
+      "id": "input",
+      "type": "input.run",
+      "position": { "x": 0, "y": 0 },
+      "data": {
+        "defaults": {}
+      }
+    },
+    {
+      "id": "generate_bot",
+      "type": "strategylab.generate_bot",
+      "position": { "x": 350, "y": 0 },
+      "data": {}
+    },
+    {
+      "id": "run_backtest",
+      "type": "trading.run_backtest",
+      "position": { "x": 700, "y": 0 },
+      "data": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "e-input-generate_bot",
+      "source": "input",
+      "target": "generate_bot"
+    },
+    {
+      "id": "e-input-run_backtest",
+      "source": "input",
+      "target": "run_backtest"
+    },
+    {
+      "id": "e-generate_bot-run_backtest",
+      "source": "generate_bot",
+      "target": "run_backtest"
+    }
+  ],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 },
+  "meta": {
+    "template": true,
+    "name": "Alignment → Generate Bot → Backtest",
+    "notes": [
+      "This template expects run.inputs.alignment_id (required) and run.inputs.timerange (optional).",
+      "Execution merges upstream outputs for a node (MVP behavior)."
+    ]
+  }
+}

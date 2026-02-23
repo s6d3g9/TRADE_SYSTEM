@@ -11,8 +11,37 @@ export type PairInfo = {
   kinds?: Array<'perp' | 'spot'>
 }
 
-export async function listPairs(): Promise<PairInfo[]> {
-  return http<PairInfo[]>('/market/pairs')
+export type MarketExchangeInfo = {
+  exchange: string
+  kinds: Array<'spot' | 'perp'>
+}
+
+export async function listExchanges(): Promise<MarketExchangeInfo[]> {
+  return http<MarketExchangeInfo[]>('/market/exchanges')
+}
+
+export async function listPairs(params?: {
+  source?: 'map' | 'discover'
+  exchange?: string
+  kind?: 'spot' | 'perp'
+  quote?: string
+  search?: string
+  limit?: number
+  offset?: number
+}): Promise<PairInfo[]> {
+  const source = params?.source ?? 'map'
+  if (source === 'map') return http<PairInfo[]>('/market/pairs')
+
+  const search = new URLSearchParams({
+    source: 'discover',
+    exchange: params?.exchange ?? 'binance',
+    kind: params?.kind ?? 'spot',
+    quote: params?.quote ?? 'USDT',
+  })
+  if (params?.search) search.set('search', params.search)
+  if (params?.limit) search.set('limit', String(params.limit))
+  if (params?.offset) search.set('offset', String(params.offset))
+  return http<PairInfo[]>(`/market/pairs?${search.toString()}`)
 }
 
 export type Candle = {

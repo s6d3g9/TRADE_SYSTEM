@@ -1,12 +1,11 @@
 from __future__ import annotations
 
+from time import time
 from typing import Any
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
-from time import time
 from sqlalchemy.ext.asyncio import AsyncSession
-import httpx
 
 from app.core.db import get_db
 from app.schemas.market import AggregateSeriesOut, CandleOut, CandleSeriesOut, Exchange
@@ -21,11 +20,93 @@ MAX_LIMIT = 200000
 TF_SECONDS = {"1s": 1, "5s": 5, "1m": 60, "5m": 300, "15m": 900, "30m": 1800, "1h": 3600, "2h": 7200, "4h": 14400, "1d": 86400}
 
 
+@router.get("/exchanges")
+async def list_exchanges() -> list[dict[str, Any]]:
+    """List supported exchanges for market discovery.
+
+    This is intentionally a small curated list aligned with `schemas.market.Exchange`.
+    `kinds` describes whether we can discover spot/perp pairs.
+    """
+    items: list[dict[str, Any]] = []
+    for ex in sorted(market_clients.FETCHERS.keys()):
+        kinds: list[str] = ["spot"]
+        if ex in {"binance", "bybit", "okx"}:
+            kinds = ["spot", "perp"]
+        items.append({"exchange": ex, "kinds": kinds})
+    return items
+
+
+@router.get("/rules")
+async def market_rules() -> dict[str, Any]:
+    """Frontend-facing rules to format/convert pairs.
+
+    These are intentionally simple and intended for display + request symbol formation.
+    For complex cases (e.g., Kraken legacy symbols), client may fall back to server-provided
+    symbols from discovery endpoints.
+    """
+    return {
+        "display": {"separator": "/", "template": "{base}/{quote}"},
+        "native": {
+            "binance": {"template": "{base}{quote}"},
+            "bybit": {"template": "{base}{quote}"},
+            "okx": {"template": "{base}-{quote}"},
+            "coinbase": {"template": "{base}-{quote}"},
+            # Kraken has multiple legacy asset codes (e.g. XBT) and pair ids; treat as non-algorithmic.
+            "kraken": {"template": None},
+        },
+    }
+
+
 @router.get("/pairs")
 async def list_pairs(
+    source: str = Query(default="map", description="Pairs source: map (curated) or discover (live from exchange)."),
+    exchange: Exchange = Query(default="binance", description="Used only when source=discover."),
+    kind: str = Query(default="spot", description="Used only when source=discover: spot|perp"),
+    quote: str = Query(default="USDT", description="Used only when source=discover (e.g. USDT, USD)."),
+    search: str | None = Query(default=None, description="Used only when source=discover."),
+    limit: int = Query(default=1000, le=5000, ge=1, description="Used only when source=discover."),
+    offset: int = Query(default=0, ge=0, description="Used only when source=discover."),
     persist: bool = Query(default=False, description="Persist fetched candles to Postgres (for backtest/trading). View mode should keep this false."),
     session: AsyncSession = Depends(get_db),
 ) -> list[dict[str, Any]]:
+    if source.lower() == "discover":
+        kind_norm = (kind or "spot").strip().lower()
+        if kind_norm not in {"spot", "perp"}:
+            raise HTTPException(status_code=400, detail="invalid kind")
+
+        if exchange == "binance":
+            if kind_norm == "perp":
+                return await market_clients.discover_binance_perp_pairs(
+                    quote=quote,
+                    search=search,
+                    limit=limit,
+                    offset=offset,
+                )
+            return await market_clients.discover_binance_spot_pairs(
+                quote=quote,
+                search=search,
+                limit=limit,
+                offset=offset,
+            )
+        else:
+            # For other exchanges, fall back to curated SYMBOL_MAP with exchange filter
+            # Real implementation would fetch from exchange API, but for now use static map
+            pairs_filtered: list[dict[str, Any]] = []
+            for norm, per_ex in market_clients.SYMBOL_MAP.items():
+                if exchange not in per_ex:
+                    continue
+                if kind_norm == "spot" and "spot" not in market_clients.PAIR_KINDS.get(norm, ["perp", "spot"]):
+                    continue
+                if kind_norm == "perp" and "perp" not in market_clients.PAIR_KINDS.get(norm, ["perp", "spot"]):
+                    continue
+                pairs_filtered.append({
+                    "pair": norm,
+                    "exchanges": [exchange],
+                    "symbols": {exchange: per_ex[exchange]},
+                    "kinds": market_clients.PAIR_KINDS.get(norm, ["perp", "spot"]),
+                })
+            return pairs_filtered
+
     pairs: list[dict[str, Any]] = []
     for norm, per_ex in market_clients.SYMBOL_MAP.items():
         base_ex = next(iter(per_ex))
@@ -117,13 +198,17 @@ async def get_candles(
     persist: bool = Query(default=False, description="Persist fetched candles to Postgres (for backtest/trading). View mode should keep this false."),
     session: AsyncSession = Depends(get_db),
 ) -> CandleSeriesOut:
+    """Fetch candles for a normalized pair (e.g. BTC/USDT) from a specific exchange.
+    
+    Backend converts normalized pair to exchange-native symbol automatically.
+    """
     timeframe = timeframe.lower()
     if timeframe not in market_clients.SUPPORTED_TF:
         raise HTTPException(status_code=400, detail="unsupported timeframe")
 
-    if pair in SYMBOL_MAP and exchange not in SYMBOL_MAP[pair]:
-        raise HTTPException(status_code=400, detail=f"pair {pair} not on {exchange}")
-
+    # Accept any normalized pair; resolve_symbol will handle conversion.
+    # For curated pairs: will use SYMBOL_MAP.
+    # For discovery pairs: will use algorithmic fallback (works for Binance/Bybit/OKX/Coinbase).
     cached = await get_cached(exchange, pair, timeframe)
     if cached:
         return CandleSeriesOut(exchange=exchange, pair=pair, timeframe=timeframe, candles=cached[-limit:])

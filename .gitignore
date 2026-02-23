@@ -17,3 +17,6 @@ dist/
 
 # Env
 .env
+
+# Temporary workspace files
+tmp_delete_me.txt

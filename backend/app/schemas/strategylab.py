@@ -82,3 +82,90 @@ class StrategyAlignmentOut(StrategyAlignmentBase):
     alignment_id: str
     created_at: datetime | None = None
     updated_at: datetime | None = None
+
+
+class ConfigFileBase(BaseModel):
+    scope: str = Field(min_length=1, description="Config scope (e.g., 'global', 'bot:{bot_id}')")
+    owner_id: str = Field(min_length=1, description="Owner identifier")
+    name: str = Field(default="config.json", description="Config file name")
+    content: dict[str, Any] = Field(default_factory=dict, description="JSON config content")
+    is_active: bool = Field(default=False, description="Whether this is the active config for scope/owner")
+
+
+class ConfigFileCreate(ConfigFileBase):
+    pass
+
+
+class ConfigFileUpdate(BaseModel):
+    config_id: str = Field(min_length=1)
+    name: str | None = None
+    content: dict[str, Any] | None = None
+    is_active: bool | None = None
+
+
+class ConfigFileOut(ConfigFileBase):
+    config_id: str
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class ModelAutotunePromptOut(BaseModel):
+    prompt_id: str = Field(min_length=1)
+    title: str = Field(min_length=1)
+    description: str = Field(default="")
+    tags: list[str] = Field(default_factory=list)
+    system_prompt: str = Field(default="")
+    user_prompt_template: str = Field(default="")
+
+
+class ModelAutotunePromptListOut(BaseModel):
+    items: list[ModelAutotunePromptOut] = Field(default_factory=list)
+
+
+class ConfigParamBase(BaseModel):
+    path: str = Field(min_length=1, description="Dot-path key (dict-only).")
+    value: Any = Field(description="JSON value for this path")
+    value_type: str | None = Field(default=None, description="Optional value type hint")
+
+
+class ConfigParamOut(ConfigParamBase):
+    param_id: str
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class ConfigParamsOut(BaseModel):
+    config: ConfigFileOut
+    params: list[ConfigParamOut]
+    source: str = Field(default="stored", description="stored|materialized")
+
+
+class ConfigParamsSaveRequest(BaseModel):
+    name: str | None = Field(default=None, description="Optional filename for new config")
+    make_active: bool = Field(default=False, description="Activate new config for scope/owner")
+    params: list[ConfigParamBase] = Field(default_factory=list)
+
+
+class ConfigFileBase(BaseModel):
+    scope: str = Field(min_length=1)
+    owner_id: str = Field(min_length=1)
+    name: str = Field(default="config.json", min_length=1)
+    content: dict[str, Any] = Field(default_factory=dict)
+    is_active: bool = Field(default=False)
+
+
+class ConfigFileCreate(ConfigFileBase):
+    make_active: bool = Field(default=False)
+
+
+class ConfigFileUpdate(BaseModel):
+    config_id: str = Field(min_length=1)
+    name: str | None = None
+    content: dict[str, Any] | None = None
+    is_active: bool | None = None
+
+
+class ConfigFileOut(ConfigFileBase):
+    config_id: str
+    created_at: datetime | None = None
+    updated_at: datetime | None = None

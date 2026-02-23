@@ -96,8 +96,11 @@ function computeIndicators(candles: Candle[]): IndicatorBundle {
   return { emaFast, emaSlow, macd: macdLine, macdSignal, rsi, signals }
 }
 
-function formatPrice(v: number) {
-  return v.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+function formatPrice(v?: number | null) {
+  if (v === undefined || v === null || !Number.isFinite(v)) return '—'
+  const abs = Math.abs(v)
+  const maximumFractionDigits = abs >= 1000 ? 0 : abs >= 1 ? 2 : abs >= 0.01 ? 4 : abs >= 0.0001 ? 6 : 8
+  return v.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits })
 }
 
 function formatCompact(v?: number | null) {
@@ -176,7 +179,7 @@ export default function TerminalPage() {
     [timeframe],
   )
 
-  const width = 960
+  const [width, setWidth] = useState(960)
 
   useEffect(() => {
     let active = true
@@ -184,7 +187,9 @@ export default function TerminalPage() {
       setPairsLoading(true)
       setPairsError(null)
       try {
-        const res = await listPairs()
+        // Use curated 'map' source which includes multi-exchange normalized pairs.
+        // Frontend always sends normalized pairs (e.g. BTC/USDT); backend resolves to native symbols.
+        const res = await listPairs({ source: 'map' })
         if (!active) return
         setPairs(res)
         if (res.length && !res.find((p) => p.pair === pair)) {
@@ -232,6 +237,7 @@ export default function TerminalPage() {
       setLoading(true)
       setError(null)
       try {
+        // Always use normalized pair (e.g. BTC/USDT); backend resolves to native symbol.
         if (aggEnabled) {
           const ex = aggExchanges.length > 0 ? aggExchanges : [exchange]
           const res = await getAggregateCandles({ exchanges: ex, pair, timeframe, limit: fetchLimit })
@@ -344,6 +350,22 @@ export default function TerminalPage() {
   }, [candles.length, visibleCount, windowEnd])
 
   const chartSvgRef = useRef<SVGSVGElement | null>(null)
+  const chartContainerRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const el = chartContainerRef.current
+    if (!el) return
+
+    const apply = () => {
+      const next = Math.max(640, el.clientWidth || 0)
+      if (next) setWidth(next)
+    }
+
+    apply()
+    const ro = new ResizeObserver(() => apply())
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   type Span = { key: string; label: string; start: number; end: number }
 
@@ -1421,6 +1443,7 @@ export default function TerminalPage() {
           <Card>
             <div style={{ display: 'grid', gap: 12 }}>
               <div
+                ref={chartContainerRef}
                 style={{ overflow: 'hidden', touchAction: 'none' }}
                 onWheel={onChartWheel}
                 onPointerDown={onChartPointerDown}
@@ -1901,10 +1924,20 @@ export default function TerminalPage() {
                     </span>
                   </span>
                   <span style={{ display: 'grid', justifyItems: 'end' }}>
-                    <span style={{ fontWeight: 600, fontSize: 12 }}>
-                      {price !== undefined ? `$${price.toFixed(2)}` : '—'}
-                    </span>
-                    <span style={{ fontSize: 11, color: change ? (change > 0 ? 'var(--pos)' : 'var(--neg)') : 'var(--muted)' }}>
+                    <span style={{ fontWeight: 600, fontSize: 12 }}>${formatPrice(price)}</span>
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color:
+                          change !== undefined && change !== null
+                            ? change > 0
+                              ? 'var(--pos)'
+                              : change < 0
+                                ? 'var(--neg)'
+                                : 'var(--muted)'
+                            : 'var(--muted)',
+                      }}
+                    >
                       {change !== undefined && change !== null ? `${change.toFixed(1)}%` : ''}
                     </span>
                     <span style={{ fontSize: 11, color: 'var(--muted)' }}>Vol {formatCompact(vol)} USDT</span>

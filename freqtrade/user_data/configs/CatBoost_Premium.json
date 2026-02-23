@@ -1,0 +1,44 @@
+{
+  "name": "CatBoost Premium Config",
+  "description": "Premium CatBoost configuration for professional trading",
+  "algorithm": "CatBoostRegressor",
+  "tags": ["premium", "categorical-features", "robust"],
+  "freqai": {
+    "enabled": true,
+    "model_save_type": "stable",
+    "feature_parameters": {
+      "include_timeframes": ["1m", "5m", "15m", "1h", "4h"],
+      "include_corr_pairlist": [
+        "BTC/USDT",
+        "ETH/USDT",
+        "BNB/USDT"
+      ],
+      "label_period_candles": 30,
+      "include_shifted_candles": 5,
+      "DI_threshold": 0.98,
+      "weight_factor": 0.98,
+      "principal_component_analysis": true,
+      "use_SVM_to_remove_outliers": true,
+      "use_DBSCAN_to_remove_outliers": true,
+      "indicator_periods_candles": [5, 10, 20, 50, 100, 200]
+    },
+    "data_split_parameters": {
+      "test_size": 0.2,
+      "random_state": 123,
+      "shuffle": false
+    },
+    "model_training_parameters": {
+      "iterations": 2000,
+      "learning_rate": 0.03,
+      "depth": 12,
+      "l2_leaf_reg": 3,
+      "min_data_in_leaf": 20,
+      "random_strength": 1.5,
+      "bagging_temperature": 0.8,
+      "border_count": 128,
+      "random_state": 42,
+      "task_type": "CPU",
+      "verbose": false
+    }
+  }
+}

@@ -9,7 +9,13 @@ const linkStyle = ({ isActive }: { isActive: boolean }) => ({
   background: isActive ? 'var(--selected)' : 'transparent',
 })
 
-export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
+type Props = {
+  onNavigate?: () => void
+  globalSearch: string
+  onGlobalSearchChange: (next: string) => void
+}
+
+export default function Sidebar({ onNavigate, globalSearch, onGlobalSearchChange }: Props) {
   return (
     <aside
       style={{
@@ -17,13 +23,30 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
         borderRight: '1px solid var(--border)',
         background: 'var(--surface)',
         color: 'var(--text)',
-        padding: 12,
+        padding: 0,
         overflowY: 'auto',
         height: '100%',
         boxSizing: 'border-box',
       }}
     >
-      <div style={{ fontWeight: 700, marginBottom: 12 }}>Trading-Hive</div>
+      <div style={{ padding: 12, borderBottom: '1px solid var(--border)' }}>
+        <input
+          placeholder="Global Search"
+          value={globalSearch}
+          onChange={(e) => onGlobalSearchChange(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '8px 10px',
+            borderRadius: 8,
+            border: '1px solid var(--border)',
+            background: 'var(--bg)',
+            color: 'var(--text)',
+            boxSizing: 'border-box',
+          }}
+        />
+      </div>
+
+      <div style={{ padding: 12 }}>
 
       <div style={{ fontSize: 12, opacity: 0.7, margin: '12px 0 6px' }}>Dashboard</div>
       <NavLink to="/dashboard/overview" style={linkStyle} onClick={onNavigate}>
@@ -51,6 +74,12 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <NavLink to="/strategylab/backtest" style={linkStyle} onClick={onNavigate}>
         Backtest
       </NavLink>
+      <NavLink to="/strategylab/benchmark" style={linkStyle} onClick={onNavigate}>
+        Benchmark
+      </NavLink>
+      <NavLink to="/strategylab/graphs" style={linkStyle} onClick={onNavigate}>
+        Node Graphs
+      </NavLink>
       <NavLink to="/strategylab/optimize" style={linkStyle} onClick={onNavigate}>
         Optimize
       </NavLink>
@@ -59,6 +88,15 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       </NavLink>
       <NavLink to="/strategylab/combinator" style={linkStyle} onClick={onNavigate}>
         Combinator
+      </NavLink>
+      <NavLink to="/strategylab/editor" style={linkStyle} onClick={onNavigate}>
+        Advanced Editor
+      </NavLink>
+
+
+      <div style={{ fontSize: 12, opacity: 0.7, margin: '12px 0 6px' }}>Store</div>
+      <NavLink to="/store" style={linkStyle} onClick={onNavigate}>
+        Marketplace
       </NavLink>
 
       <div style={{ fontSize: 12, opacity: 0.7, margin: '12px 0 6px' }}>Agents</div>
@@ -89,6 +127,9 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <div style={{ fontSize: 12, opacity: 0.7, margin: '12px 0 6px' }}>Charts</div>
       <NavLink to="/charts/terminal" style={linkStyle} onClick={onNavigate}>
         Terminal
+      </NavLink>
+      <NavLink to="/charts/terminal2" style={linkStyle} onClick={onNavigate}>
+        Terminal 2 (TradingView)
       </NavLink>
 
       <div style={{ fontSize: 12, opacity: 0.7, margin: '12px 0 6px' }}>Logs & Audit</div>
@@ -132,6 +173,8 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
       <NavLink to="/admin/maintenance" style={linkStyle} onClick={onNavigate}>
         Maintenance
       </NavLink>
+
+      </div>
     </aside>
   )
 }

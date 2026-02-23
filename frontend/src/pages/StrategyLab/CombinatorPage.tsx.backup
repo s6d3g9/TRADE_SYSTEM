@@ -1,0 +1,1891 @@
+import { useEffect, useMemo, useState } from 'react'
+
+import Card from '../../shared/ui/Card'
+import EmptyState from '../../shared/ui/EmptyState'
+import ErrorBanner from '../../shared/ui/ErrorBanner'
+import PageHeader from '../../shared/ui/PageHeader'
+import {
+  ConfigFile,
+  FreqAIModelVariant,
+  StrategyAlignment,
+  StrategyTemplate,
+  createFreqAIModelVariant,
+  createStrategyAlignment,
+  createStrategyTemplate,
+  deleteFreqAIModelVariant,
+  deleteStrategyAlignment,
+  deleteStrategyTemplate,
+  exportAlignment,
+  getAlignmentConfigFile,
+  getStrategySource,
+  autotuneAlignment,
+  autotuneAlignmentCombined,
+  autotuneStrategy,
+  autotuneModel,
+  repairAlignmentConfig,
+  generateBotFromAlignment,
+  listConfigs,
+  createConfig,
+  activateConfig,
+  importStrategiesFromRepo,
+  listFreqAIModelVariants,
+  listStrategyAlignments,
+  listStrategyTemplates,
+  listStrategySources,
+  requestAgentAlignment,
+  updateFreqAIModelVariant,
+  updateStrategyAlignment,
+  updateStrategyTemplate,
+} from '../../services/api/strategylabApi'
+
+type StrategyForm = {
+  mode: 'create' | 'edit'
+  strategy_id: string
+  slug: string
+  name: string
+  source_url: string
+  source_ref: string
+  strategy_class: string
+  description: string
+  tags: string
+  meta_text: string
+}
+
+type ModelForm = {
+  mode: 'create' | 'edit'
+  model_id: string
+  slug: string
+  name: string
+  algorithm: string
+  description: string
+  tags: string
+  config_text: string
+}
+
+type AlignmentForm = {
+  mode: 'create' | 'edit'
+  alignment_id: string
+  strategy_id: string
+  model_id: string
+  profile: string
+  status: string
+  scope_text: string
+  defaults_text: string
+  mapping_text: string
+  freqtrade_overrides_text: string
+  freqai_overrides_text: string
+}
+
+function safeParse(jsonText: string): Record<string, unknown> | undefined {
+  if (!jsonText.trim()) return undefined
+  return JSON.parse(jsonText)
+}
+
+function prettyJson(value: unknown): string {
+  if (value == null) return ''
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return ''
+  }
+}
+
+function downloadTextFile(filename: string, text: string, mime: string) {
+  const blob = new Blob([text], { type: mime })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+function toTagsArray(tags: string): string[] {
+  return tags
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+function resetStrategyForm(): StrategyForm {
+  return {
+    mode: 'create',
+    strategy_id: '',
+    slug: '',
+    name: '',
+    source_url: 'https://github.com/iterativv/NostalgiaForInfinity',
+    source_ref: '',
+    strategy_class: '',
+    description: '',
+    tags: 'nfi',
+    meta_text: '',
+  }
+}
+
+function resetModelForm(): ModelForm {
+  return {
+    mode: 'create',
+    model_id: '',
+    slug: 'xgboost-default',
+    name: 'XGBoost (default)',
+    algorithm: 'xgboost',
+    description: '',
+    tags: 'xgboost',
+    config_text: '{\n  "class": "XGBoostRegressor"\n}',
+  }
+}
+
+function resetAlignmentForm(): AlignmentForm {
+  return {
+    mode: 'create',
+    alignment_id: '',
+    strategy_id: '',
+    model_id: '',
+    profile: 'default',
+    status: 'draft',
+    scope_text: '',
+    defaults_text: '',
+    mapping_text: '',
+    freqtrade_overrides_text: '',
+    freqai_overrides_text: '',
+  }
+}
+
+export default function CombinatorPage() {
+  const [strategies, setStrategies] = useState<StrategyTemplate[]>([])
+  const [models, setModels] = useState<FreqAIModelVariant[]>([])
+  const [alignments, setAlignments] = useState<StrategyAlignment[]>([])
+
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+
+  const [selectedStrategyId, setSelectedStrategyId] = useState<string>('')
+  const [selectedModelId, setSelectedModelId] = useState<string>('')
+  const [selectedAlignmentId, setSelectedAlignmentId] = useState<string>('')
+
+  const [generateBusy, setGenerateBusy] = useState(false)
+  
+  // Sliding drawer for configs
+  const [configDrawerOpen, setConfigDrawerOpen] = useState(false)
+  const [configItems, setConfigItems] = useState<ConfigFile[]>([])
+  const [configOwnerScope, setConfigOwnerScope] = useState<'strategy' | 'model' | 'alignment'>('alignment')
+  const [configOwnerId, setConfigOwnerId] = useState<string>('')
+  const [configContentText, setConfigContentText] = useState<string>('')
+  const [configFilename, setConfigFilename] = useState<string>('config.json')
+
+  useEffect(() => {
+    void loadAll()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const strategyById = useMemo(() => new Map(strategies.map((s) => [s.strategy_id, s])), [strategies])
+  const modelById = useMemo(() => new Map(models.map((m) => [m.model_id, m])), [models])
+
+  const filteredAlignments = useMemo(() => {
+    if (!selectedStrategyId && !selectedModelId) return alignments
+    return alignments.filter((a) => {
+      if (selectedStrategyId && a.strategy_id !== selectedStrategyId) return false
+      if (selectedModelId && a.model_id !== selectedModelId) return false
+      return true
+    })
+  }, [alignments, selectedModelId, selectedStrategyId])
+
+  const configAlignmentId = useMemo(() => {
+    if (selectedAlignmentId) return selectedAlignmentId
+    if (filteredAlignments.length >= 1) return filteredAlignments[0].alignment_id
+    return ''
+  }, [filteredAlignments, selectedAlignmentId])
+
+  async function loadAll() {
+    setError(null)
+    try {
+      const [s, m, a] = await Promise.all([listStrategyTemplates(), listFreqAIModelVariants(), listStrategyAlignments()])
+      setStrategies(s)
+      setModels(m)
+      setAlignments(a)
+
+      // Keep selections coherent if items were deleted
+      if (selectedStrategyId && !s.some((x) => x.strategy_id === selectedStrategyId)) {
+        setSelectedStrategyId('')
+        setStrategyForm(resetStrategyForm())
+      }
+      if (selectedModelId && !m.some((x) => x.model_id === selectedModelId)) {
+        setSelectedModelId('')
+        setModelForm(resetModelForm())
+      }
+      if (selectedAlignmentId && !a.some((x) => x.alignment_id === selectedAlignmentId)) {
+        setSelectedAlignmentId('')
+        setAlignmentForm((prev) => ({ ...resetAlignmentForm(), strategy_id: prev.strategy_id, model_id: prev.model_id }))
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load data')
+    }
+  }
+
+  function applyStrategySelection(strategy_id: string) {
+    setSelectedStrategyId(strategy_id)
+    setStrategySources([])
+    setStrategyFileText('')
+    setStrategyFilePath('')
+    setStrategyFileName('')
+    if (!strategy_id) {
+      setStrategyForm(resetStrategyForm())
+      setSelectedAlignmentId('')
+      setAlignmentForm((prev) => ({ ...resetAlignmentForm(), strategy_id: '', model_id: prev.model_id }))
+      return
+    }
+    const s = strategyById.get(strategy_id)
+    if (!s) return
+    setStrategyForm({
+      mode: 'edit',
+      strategy_id: s.strategy_id,
+      slug: s.slug,
+      name: s.name,
+      source_url: s.source_url,
+      source_ref: s.source_ref ?? '',
+      strategy_class: s.strategy_class ?? '',
+      description: s.description ?? '',
+      tags: (s.tags || []).join(', '),
+      meta_text: prettyJson(s.meta),
+    })
+    // Sync alignment builder with current selection when it is in create mode
+    setAlignmentForm((prev) => (prev.mode === 'create' ? { ...prev, strategy_id } : prev))
+  }
+
+  function applyModelSelection(model_id: string) {
+    setSelectedModelId(model_id)
+    if (!model_id) {
+      setModelForm(resetModelForm())
+      setSelectedAlignmentId('')
+      setAlignmentForm((prev) => ({ ...resetAlignmentForm(), model_id: '', strategy_id: prev.strategy_id }))
+      return
+    }
+    const m = modelById.get(model_id)
+    if (!m) return
+    setModelForm({
+      mode: 'edit',
+      model_id: m.model_id,
+      slug: m.slug,
+      name: m.name,
+      algorithm: m.algorithm,
+      description: m.description ?? '',
+      tags: (m.tags || []).join(', '),
+      config_text: prettyJson(m.config),
+    })
+    setAlignmentForm((prev) => (prev.mode === 'create' ? { ...prev, model_id } : prev))
+  }
+
+  function applyAlignmentSelection(alignment_id: string) {
+    setSelectedAlignmentId(alignment_id)
+    if (!alignment_id) {
+      setAlignmentForm((prev) => ({ ...resetAlignmentForm(), strategy_id: prev.strategy_id, model_id: prev.model_id }))
+      return
+    }
+    const a = alignments.find((x) => x.alignment_id === alignment_id)
+    if (!a) return
+    setAlignmentForm({
+      mode: 'edit',
+      alignment_id: a.alignment_id,
+      strategy_id: a.strategy_id,
+      model_id: a.model_id,
+      profile: a.profile ?? 'default',
+      status: a.status,
+      scope_text: prettyJson(a.scope),
+      defaults_text: prettyJson(a.defaults),
+      mapping_text: prettyJson(a.mapping),
+      freqtrade_overrides_text: prettyJson(a.freqtrade_overrides),
+      freqai_overrides_text: prettyJson(a.freqai_overrides),
+    })
+    setSelectedStrategyId(a.strategy_id)
+    setSelectedModelId(a.model_id)
+    const s = strategyById.get(a.strategy_id)
+    if (s) {
+      setStrategyForm({
+        mode: 'edit',
+        strategy_id: s.strategy_id,
+        slug: s.slug,
+        name: s.name,
+        source_url: s.source_url,
+        source_ref: s.source_ref ?? '',
+        strategy_class: s.strategy_class ?? '',
+        description: s.description ?? '',
+        tags: (s.tags || []).join(', '),
+        meta_text: prettyJson(s.meta),
+      })
+    }
+    const m = modelById.get(a.model_id)
+    if (m) {
+      setModelForm({
+        mode: 'edit',
+        model_id: m.model_id,
+        slug: m.slug,
+        name: m.name,
+        algorithm: m.algorithm,
+        description: m.description ?? '',
+        tags: (m.tags || []).join(', '),
+        config_text: prettyJson(m.config),
+      })
+    }
+  }
+
+  async function saveStrategy() {
+    setBusy(true)
+    setError(null)
+    setMessage(null)
+    try {
+      let meta: Record<string, unknown> = {}
+      if (strategyForm.meta_text.trim()) {
+        try {
+          meta = JSON.parse(strategyForm.meta_text)
+        } catch {
+          throw new Error('meta: invalid JSON')
+        }
+      }
+
+      const payload = {
+        slug: strategyForm.slug.trim(),
+        name: strategyForm.name.trim(),
+        source_type: 'git',
+        source_url: strategyForm.source_url.trim(),
+        source_ref: strategyForm.source_ref.trim() || null,
+        strategy_class: strategyForm.strategy_class.trim() || null,
+        description: strategyForm.description.trim() || null,
+        tags: toTagsArray(strategyForm.tags),
+        meta,
+      }
+
+      if (!payload.slug || !payload.name || !payload.source_url) throw new Error('slug, name, source_url are required')
+
+      if (strategyForm.mode === 'create') {
+        await createStrategyTemplate(payload)
+        setMessage('Strategy created')
+      } else {
+        const full: StrategyTemplate = {
+          strategy_id: strategyForm.strategy_id,
+          ...payload,
+          meta: payload.meta,
+          tags: payload.tags,
+        }
+        await updateStrategyTemplate(full)
+        setMessage('Strategy saved')
+      }
+
+      await loadAll()
+      // keep selection (if edited), or reset (if created)
+      if (strategyForm.mode === 'create') {
+        setSelectedStrategyId('')
+        setStrategyForm(resetStrategyForm())
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save strategy')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function deleteSelectedStrategy() {
+    if (!selectedStrategyId) return
+    setBusy(true)
+    setError(null)
+    setMessage(null)
+    try {
+      await deleteStrategyTemplate(selectedStrategyId)
+      setMessage('Strategy deleted')
+      setSelectedStrategyId('')
+      setStrategyForm(resetStrategyForm())
+      await loadAll()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function saveModel() {
+    setBusy(true)
+    setError(null)
+    setMessage(null)
+    try {
+      let config: Record<string, unknown> = {}
+      if (modelForm.config_text.trim()) {
+        try {
+          config = JSON.parse(modelForm.config_text)
+        } catch {
+          throw new Error('config: invalid JSON')
+        }
+      }
+
+      const payload = {
+        slug: modelForm.slug.trim(),
+        name: modelForm.name.trim(),
+        algorithm: modelForm.algorithm.trim(),
+        config,
+        description: modelForm.description.trim() || null,
+        tags: toTagsArray(modelForm.tags),
+      }
+
+      if (!payload.slug || !payload.name || !payload.algorithm) throw new Error('slug, name, algorithm are required')
+
+      if (modelForm.mode === 'create') {
+        await createFreqAIModelVariant(payload)
+        setMessage('Model variant created')
+      } else {
+        const full: FreqAIModelVariant = { model_id: modelForm.model_id, ...payload, tags: payload.tags }
+        await updateFreqAIModelVariant(full)
+        setMessage('Model variant saved')
+      }
+
+      await loadAll()
+      if (modelForm.mode === 'create') {
+        setSelectedModelId('')
+        setModelForm(resetModelForm())
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save model variant')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function deleteSelectedModel() {
+    if (!selectedModelId) return
+    setBusy(true)
+    setError(null)
+    setMessage(null)
+    try {
+      await deleteFreqAIModelVariant(selectedModelId)
+      setMessage('Model variant deleted')
+      setSelectedModelId('')
+      setModelForm(resetModelForm())
+      await loadAll()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function saveAlignment(override?: { strategy_id: string; model_id: string }) {
+    setBusy(true)
+    setError(null)
+    setMessage(null)
+    try {
+      let scope: Record<string, unknown> | undefined
+      let defaults: Record<string, unknown> | undefined
+      let mapping: Record<string, unknown> | undefined
+      let freqtrade_overrides: Record<string, unknown> = {}
+      let freqai_overrides: Record<string, unknown> = {}
+
+      try {
+        scope = alignmentForm.scope_text ? safeParse(alignmentForm.scope_text) : undefined
+      } catch {
+        throw new Error('scope: invalid JSON')
+      }
+      try {
+        defaults = alignmentForm.defaults_text ? safeParse(alignmentForm.defaults_text) : undefined
+      } catch {
+        throw new Error('defaults: invalid JSON')
+      }
+      try {
+        mapping = alignmentForm.mapping_text ? safeParse(alignmentForm.mapping_text) : undefined
+      } catch {
+        throw new Error('mapping: invalid JSON')
+      }
+      try {
+        freqtrade_overrides = alignmentForm.freqtrade_overrides_text
+          ? safeParse(alignmentForm.freqtrade_overrides_text) || {}
+          : {}
+      } catch {
+        throw new Error('freqtrade_overrides: invalid JSON')
+      }
+      try {
+        freqai_overrides = alignmentForm.freqai_overrides_text ? safeParse(alignmentForm.freqai_overrides_text) || {} : {}
+      } catch {
+        throw new Error('freqai_overrides: invalid JSON')
+      }
+
+      const payload = {
+        strategy_id: override?.strategy_id ?? alignmentForm.strategy_id,
+        model_id: override?.model_id ?? alignmentForm.model_id,
+        profile: alignmentForm.profile.trim() || null,
+        status: alignmentForm.status.trim() || 'draft',
+        scope: scope ?? null,
+        defaults: defaults ?? null,
+        mapping: mapping ?? null,
+        freqtrade_overrides,
+        freqai_overrides,
+      }
+
+      if (!payload.strategy_id || !payload.model_id) throw new Error('strategy_id and model_id are required')
+
+      if (alignmentForm.mode === 'create') {
+        await createStrategyAlignment(payload)
+        setMessage('Alignment created')
+        setSelectedAlignmentId('')
+        setAlignmentForm({ ...resetAlignmentForm(), strategy_id: payload.strategy_id, model_id: payload.model_id })
+      } else {
+        const full: StrategyAlignment = {
+          alignment_id: alignmentForm.alignment_id,
+          ...payload,
+          scope: payload.scope,
+          defaults: payload.defaults,
+          mapping: payload.mapping,
+        }
+        await updateStrategyAlignment(full)
+        setMessage('Alignment saved')
+      }
+
+      await loadAll()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save alignment')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function deleteSelectedAlignment() {
+    if (!selectedAlignmentId) return
+    setBusy(true)
+    setError(null)
+    setMessage(null)
+    try {
+      await deleteStrategyAlignment(selectedAlignmentId)
+      setMessage('Alignment deleted')
+      setSelectedAlignmentId('')
+      setAlignmentForm((prev) => ({ ...resetAlignmentForm(), strategy_id: prev.strategy_id, model_id: prev.model_id }))
+      await loadAll()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function askAgentsForSelectedAlignment() {
+    if (!selectedAlignmentId) return
+    setBusy(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const res = await requestAgentAlignment(selectedAlignmentId)
+      setMessage(`Queued agent task: ${res.task_id}`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to enqueue task')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function importNfiStrategies() {
+    setBusy(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const res = await importStrategiesFromRepo({
+        repo_url: 'https://github.com/iterativv/NostalgiaForInfinity',
+        limit: 10,
+        tag: 'nfi',
+      })
+      setMessage(`Imported: ${res.imported.length}, skipped: ${res.skipped.length}, detected: ${res.detected}`)
+      await loadAll()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to import strategies')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function createPresetModelVariant(preset: 'xgboost' | 'lightgbm' | 'catboost') {
+    setBusy(true)
+    setError(null)
+    setMessage(null)
+    try {
+      const presets = {
+        xgboost: {
+          slug: 'xgboost-default',
+          name: 'XGBoost (default)',
+          algorithm: 'xgboost',
+          config: { class: 'XGBoostRegressor' },
+          description: 'Default xgboost starter config',
+          tags: ['xgboost', 'default'],
+        },
+        lightgbm: {
+          slug: 'lightgbm-default',
+          name: 'LightGBM (default)',
+          algorithm: 'lightgbm',
+          config: { class: 'LGBMRegressor' },
+          description: 'Default lightgbm starter config',
+          tags: ['lightgbm', 'default'],
+        },
+        catboost: {
+          slug: 'catboost-default',
+          name: 'CatBoost (default)',
+          algorithm: 'catboost',
+          config: { class: 'CatBoostRegressor' },
+          description: 'Default catboost starter config',
+          tags: ['catboost', 'default'],
+        },
+      } as const
+
+      const p = presets[preset]
+      await createFreqAIModelVariant({
+        slug: p.slug,
+        name: p.name,
+        algorithm: p.algorithm,
+        config: p.config,
+        description: p.description,
+        tags: [...p.tags],
+      })
+      setMessage(`Model variant created: ${p.slug}`)
+      await loadAll()
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to create model'
+      // existing http client returns generic "HTTP 409" for conflicts
+      if (msg.includes('HTTP 409')) {
+        setMessage('Model variant already exists')
+        await loadAll()
+      } else {
+        setError(msg)
+      }
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function loadStrategyFile(strategy_id: string, pathOverride?: string) {
+    if (!strategy_id) return
+    setConfigExportBusy(true)
+    setError(null)
+    try {
+      const res = await getStrategySource(strategy_id, pathOverride)
+      setStrategyFileName(res.filename || 'Strategy.py')
+      setStrategyFilePath(res.path || '')
+      setStrategyFileText(res.content || '')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load strategy file')
+    } finally {
+      setConfigExportBusy(false)
+    }
+  }
+
+  async function loadStrategySources(strategy_id: string) {
+    if (!strategy_id) return
+    try {
+      const res = await listStrategySources(strategy_id)
+      setStrategySources(res.items || [])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to list strategy files')
+    }
+  }
+
+  async function loadModelConfigFile(alignment_id: string) {
+    if (!alignment_id) return
+    setConfigExportBusy(true)
+    setError(null)
+    try {
+      const res = await getAlignmentConfigFile(alignment_id)
+      setModelConfigFileName(res.filename || 'config.json')
+      setModelConfigFileText(JSON.stringify(res.config ?? {}, null, 2))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load config.json')
+    } finally {
+      setConfigExportBusy(false)
+    }
+  }
+
+  async function openStrategyConfig() {
+    setStrategyConfigBarOpen(true)
+    if (!selectedStrategyId) return
+    await loadStrategySources(selectedStrategyId)
+    await loadStrategyFile(selectedStrategyId)
+  }
+
+  async function openModelConfig() {
+    setModelConfigBarOpen(true)
+    if (!configAlignmentId) return
+    if (configAlignmentId !== selectedAlignmentId) {
+      applyAlignmentSelection(configAlignmentId)
+    }
+    await loadModelConfigFile(configAlignmentId)
+  }
+
+  async function loadConfigs(scope: 'strategy' | 'model' | 'alignment', owner_id: string) {
+    if (!owner_id) return
+    try {
+      const rows = await listConfigs(scope, owner_id)
+      setConfigItems(rows)
+      const active = rows.find((c) => c.is_active)
+      setConfigActiveId(active?.config_id ?? null)
+      if (active) {
+        setConfigContentText(JSON.stringify(active.content ?? {}, null, 2))
+        setConfigFilename(active.name || 'config.json')
+      } else if (rows.length === 0) {
+        // seed editor with a sensible default per scope so user can save quickly
+        if (scope === 'model') {
+          const modelCfg = modelForm.config_text || ''
+          setConfigContentText(modelCfg)
+          setConfigFilename('config.json')
+        } else if (scope === 'alignment' && configAlignmentId) {
+          // use generated alignment config as a starting point
+          try {
+            const gen = await getAlignmentConfigFile(configAlignmentId)
+            setConfigContentText(JSON.stringify(gen.config ?? {}, null, 2))
+            setConfigFilename(gen.filename || 'config.json')
+          } catch {
+            setConfigContentText('')
+            setConfigFilename('config.json')
+          }
+        } else {
+          setConfigContentText('')
+          setConfigFilename('config.json')
+        }
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load configs')
+    }
+  }
+
+  async function openConfigsDrawer(scope: 'strategy' | 'model' | 'alignment', owner_id: string) {
+    setConfigOwnerScope(scope)
+    setConfigOwnerId(owner_id)
+    setConfigItems([])
+    setConfigActiveId(null)
+    setConfigContentText('')
+    setConfigFilename('config.json')
+    setConfigDrawerOpen(true)
+    await loadConfigs(scope, owner_id)
+  }
+
+  async function activateConfigAndRefresh(config_id: string) {
+    try {
+      await activateConfig(config_id)
+      await loadConfigs(configOwnerScope, configOwnerId)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to activate config')
+    }
+  }
+
+  async function saveNewConfigVersion(name: string, contentText: string, makeActive: boolean) {
+    try {
+      const parsed = contentText.trim() ? JSON.parse(contentText) : {}
+      const cfg = await createConfig({
+        scope: configOwnerScope,
+        owner_id: configOwnerId,
+        name: name || 'config.json',
+        content: parsed,
+        make_active: makeActive,
+      })
+      setConfigFilename(cfg.name)
+      setConfigContentText(JSON.stringify(cfg.content ?? {}, null, 2))
+      setConfigActiveId(cfg.is_active ? cfg.config_id : configActiveId)
+      await loadConfigs(configOwnerScope, configOwnerId)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save config')
+    }
+  }
+
+  async function runStrategyAutotune() {
+    if (!selectedStrategyId) return
+    setStrategyAutotuneBusy(true)
+    setMessage(null)
+    setError(null)
+    try {
+      await autotuneStrategy(selectedStrategyId)
+      setMessage('Strategy config tuned and activated')
+      await openConfigsDrawer('strategy', selectedStrategyId)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Auto-tune failed')
+    } finally {
+      setStrategyAutotuneBusy(false)
+    }
+  }
+
+  async function runModelAutotune() {
+    if (!selectedModelId) return
+    setModelAutotuneBusy(true)
+    setMessage(null)
+    setError(null)
+    try {
+      await autotuneModel(selectedModelId)
+      setMessage('Model config tuned and activated')
+      await openConfigsDrawer('model', selectedModelId)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Auto-tune failed')
+    } finally {
+      setModelAutotuneBusy(false)
+    }
+  }
+
+  async function runAutotune() {
+    if (!selectedAlignmentId) return
+    setAutotuneBusy(true)
+    setMessage(null)
+    setError(null)
+    try {
+      await autotuneAlignment(selectedAlignmentId)
+      setMessage('AI сгенерировал и активировал новый config.json')
+      await loadConfigs('alignment', selectedAlignmentId)
+      setConfigDrawerOpen(true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Автосонастройка не удалась')
+    } finally {
+      setAutotuneBusy(false)
+    }
+  }
+
+  async function runCombinedAutotune() {
+    if (!selectedAlignmentId) return
+    setCombinedAutotuneBusy(true)
+    setMessage(null)
+    setError(null)
+    try {
+      await autotuneAlignmentCombined(selectedAlignmentId)
+      setMessage('Combined config created and activated')
+      await openConfigsDrawer('alignment', selectedAlignmentId)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Combined auto-tune failed')
+    } finally {
+      setCombinedAutotuneBusy(false)
+    }
+  }
+
+  async function runRepair() {
+    if (!selectedAlignmentId) return
+    setRepairBusy(true)
+    setMessage(null)
+    setError(null)
+    try {
+      await repairAlignmentConfig(selectedAlignmentId)
+      setMessage('Config repaired and activated')
+      await loadConfigs('alignment', selectedAlignmentId)
+      setConfigDrawerOpen(true)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Repair failed')
+    } finally {
+      setRepairBusy(false)
+    }
+  }
+
+  async function runGenerateBot() {
+    if (!selectedAlignmentId) return
+    setGenerateBusy(true)
+    setMessage(null)
+    setError(null)
+    try {
+      const res = await generateBotFromAlignment(selectedAlignmentId)
+      setMessage(`Bot ${res.bot_name} created at ${res.config_path}`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Generate bot failed')
+    } finally {
+      setGenerateBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ display: 'grid', gap: 16, maxWidth: 1400, margin: '0 auto', padding: 20 }}>
+      <PageHeader
+        title="Strategy Lab · Bot Generator"
+        description="Выбери стратегию, модель и alignment — затем сгенерируй бота одной кнопкой"
+      />
+
+      {error && <ErrorBanner message={error} onRetry={() => void loadAll()} />}
+      {message && (
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div style={{ fontSize: 13, color: '#4ade80' }}>✅ {message}</div>
+            <button onClick={() => setMessage(null)} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', cursor: 'pointer' }}>
+              Dismiss
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {/* Three Column Layout */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>
+        
+        {/* Strategies Column */}
+        <Card>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>⚡ Strategies</h3>
+            <button
+              disabled={busy}
+              onClick={() => void importNfiStrategies()}
+              style={{ 
+                padding: '6px 12px', 
+                borderRadius: 6, 
+                border: '1px solid var(--border)', 
+                background: 'var(--surface)',
+                fontSize: 12,
+                cursor: 'pointer'
+              }}
+            >
+              Import NFI
+            </button>
+          </div>
+
+          {strategies.length === 0 ? (
+            <EmptyState title="No strategies" hint="Click Import NFI to start" />
+          ) : (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {strategies.map((s) => (
+                <div
+                  key={s.strategy_id}
+                  onClick={() => applyStrategySelection(s.strategy_id)}
+                  style={{
+                    padding: 12,
+                    borderRadius: 8,
+                    border: `2px solid ${selectedStrategyId === s.strategy_id ? 'var(--primary)' : 'var(--border)'}`,
+                    background: selectedStrategyId === s.strategy_id ? 'var(--selected)' : 'var(--surface)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{s.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>{s.slug}</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>
+                    {s.strategy_class || 'No class'}
+                  </div>
+                  {selectedStrategyId === s.strategy_id && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openConfigsDrawer('strategy', s.strategy_id)
+                      }}
+                      style={{
+                        marginTop: 8,
+                        width: '100%',
+                        padding: '6px',
+                        borderRadius: 6,
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface)',
+                        fontSize: 11,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      📝 Edit Config
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* Models Column */}
+        <Card>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>🤖 Models</h3>
+          </div>
+
+          {models.length === 0 ? (
+            <EmptyState title="No models" hint="Models will appear here" />
+          ) : (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {models.map((m) => (
+                <div
+                  key={m.model_id}
+                  onClick={() => applyModelSelection(m.model_id)}
+                  style={{
+                    padding: 12,
+                    borderRadius: 8,
+                    border: `2px solid ${selectedModelId === m.model_id ? 'var(--primary)' : 'var(--border)'}`,
+                    background: selectedModelId === m.model_id ? 'var(--selected)' : 'var(--surface)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{m.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)' }}>{m.slug}</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>
+                    {m.algorithm}
+                  </div>
+                  {selectedModelId === m.model_id && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openConfigsDrawer('model', m.model_id)
+                      }}
+                      style={{
+                        marginTop: 8,
+                        width: '100%',
+                        padding: '6px',
+                        borderRadius: 6,
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface)',
+                        fontSize: 11,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      📝 Edit Config
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        {/* Alignments Column */}
+        <Card>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>🔗 Alignments</h3>
+          </div>
+
+          {filteredAlignments.length === 0 ? (
+            <EmptyState title="No alignments" hint="Select strategy + model first" />
+          ) : (
+            <div style={{ display: 'grid', gap: 8 }}>
+              {filteredAlignments.map((a) => (
+                <div
+                  key={a.alignment_id}
+                  onClick={() => applyAlignmentSelection(a.alignment_id)}
+                  style={{
+                    padding: 12,
+                    borderRadius: 8,
+                    border: `2px solid ${selectedAlignmentId === a.alignment_id ? 'var(--primary)' : 'var(--border)'}`,
+                    background: selectedAlignmentId === a.alignment_id ? 'var(--selected)' : 'var(--surface)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                  }}
+                >
+                  <div style={{ fontWeight: 600, fontSize: 13, marginBottom: 4 }}>{a.profile || 'default'}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>
+                    {strategyById.get(a.strategy_id)?.slug || a.strategy_id.substring(0, 8)}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)' }}>
+                    {modelById.get(a.model_id)?.slug || a.model_id.substring(0, 8)}
+                  </div>
+                  <div style={{ 
+                    marginTop: 6, 
+                    fontSize: 10, 
+                    fontWeight: 600, 
+                    color: a.status === 'active' ? '#4ade80' : '#fbbf24',
+                    textTransform: 'uppercase'
+                  }}>
+                    {a.status}
+                  </div>
+                  {selectedAlignmentId === a.alignment_id && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        openConfigsDrawer('alignment', a.alignment_id)
+                      }}
+                      style={{
+                        marginTop: 8,
+                        width: '100%',
+                        padding: '6px',
+                        borderRadius: 6,
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface)',
+                        fontSize: 11,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      📝 Edit Config
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Generate Bot Section */}
+      {selectedAlignmentId && (
+        <Card>
+          <div style={{ textAlign: 'center', padding: '20px 0' }}>
+            <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12, color: 'var(--muted)' }}>
+              Ready to generate bot from alignment
+            </div>
+            <button
+              disabled={generateBusy}
+              onClick={() => void handleGenerateBot()}
+              style={{
+                padding: '14px 32px',
+                borderRadius: 8,
+                border: 'none',
+                background: generateBusy ? 'var(--muted)' : 'var(--primary)',
+                color: '#fff',
+                fontSize: 15,
+                fontWeight: 700,
+                cursor: generateBusy ? 'not-allowed' : 'pointer',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                opacity: generateBusy ? 0.6 : 1,
+                transition: 'all 0.2s',
+              }}
+            >
+              {generateBusy ? '⏳ Generating...' : '🚀 Generate Bot'}
+            </button>
+          </div>
+        </Card>
+      )}
+              <button
+                onClick={() => void openStrategyConfig()}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  opacity: selectedStrategyId && configAlignmentId ? 0.95 : 0.6,
+                  cursor: selectedStrategyId && configAlignmentId ? 'pointer' : 'not-allowed',
+                }}
+                title={!configAlignmentId ? 'Нужен alignment (выбери или создай)' : undefined}
+                disabled={!selectedStrategyId}
+              >
+                Source (.py)
+              </button>
+              <button
+                onClick={() => void openStrategyConfig()}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  opacity: selectedStrategyId ? 0.95 : 0.6,
+                  cursor: selectedStrategyId ? 'pointer' : 'not-allowed',
+                }}
+                disabled={!selectedStrategyId}
+              >
+                Configs (Source)
+              </button>
+              <button
+                onClick={() => void runStrategyAutotune()}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  opacity: selectedStrategyId ? 0.95 : 0.6,
+                  cursor: selectedStrategyId ? 'pointer' : 'not-allowed',
+                }}
+                disabled={!selectedStrategyId || strategyAutotuneBusy}
+              >
+                {strategyAutotuneBusy ? 'Auto-tuning…' : 'Auto-tune (GPT)'}
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gap: 10 }}>
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>Slug</span>
+              <input value={strategyForm.slug} onChange={(e) => setStrategyForm({ ...strategyForm, slug: e.target.value })} />
+            </label>
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>Name</span>
+              <input value={strategyForm.name} onChange={(e) => setStrategyForm({ ...strategyForm, name: e.target.value })} />
+            </label>
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>Git URL</span>
+              <input value={strategyForm.source_url} onChange={(e) => setStrategyForm({ ...strategyForm, source_url: e.target.value })} />
+            </label>
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>Git ref (optional)</span>
+              <input
+                value={strategyForm.source_ref}
+                onChange={(e) => setStrategyForm({ ...strategyForm, source_ref: e.target.value })}
+                placeholder="main / tag / commit"
+              />
+            </label>
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>Strategy class (optional)</span>
+              <input
+                value={strategyForm.strategy_class}
+                onChange={(e) => setStrategyForm({ ...strategyForm, strategy_class: e.target.value })}
+                placeholder="NostalgiaForInfinityX"
+              />
+            </label>
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>Tags</span>
+              <input value={strategyForm.tags} onChange={(e) => setStrategyForm({ ...strategyForm, tags: e.target.value })} placeholder="nfi, trend" />
+            </label>
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>Meta (JSON, optional)</span>
+              <textarea
+                value={strategyForm.meta_text}
+                onChange={(e) => setStrategyForm({ ...strategyForm, meta_text: e.target.value })}
+                rows={6}
+                style={{ fontFamily: 'monospace' }}
+              />
+            </label>
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                disabled={busy}
+                onClick={() => void saveStrategy()}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              >
+                {busy ? 'Saving…' : strategyForm.mode === 'create' ? 'Create' : 'Save'}
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  setSelectedStrategyId('')
+                  setStrategyForm(resetStrategyForm())
+                  setSelectedAlignmentId('')
+                  setAlignmentForm((prev) => ({ ...resetAlignmentForm(), strategy_id: '', model_id: prev.model_id }))
+                }}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              >
+                New
+              </button>
+              <button
+                disabled={busy || !selectedStrategyId}
+                onClick={() => void deleteSelectedStrategy()}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 8 }}>
+            <div style={{ fontWeight: 700 }}>Model</div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+            <button
+              disabled={busy}
+              onClick={() => void createPresetModelVariant('xgboost')}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+            >
+              Create XGBoost default
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => void createPresetModelVariant('lightgbm')}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+            >
+              Create LightGBM default
+            </button>
+            <button
+              disabled={busy}
+              onClick={() => void createPresetModelVariant('catboost')}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)' }}
+            >
+              Create CatBoost default
+            </button>
+          </div>
+
+          {models.length === 0 ? (
+            <EmptyState title="No model variants" hint="Добавьте вариант модели (например xgboost)" />
+          ) : (
+            <label style={{ display: 'grid', gap: 4, marginBottom: 10 }}>
+              <span>Pick model variant</span>
+              <select value={selectedModelId} onChange={(e) => applyModelSelection(e.target.value)}>
+                <option value="">New…</option>
+                {models.map((m) => (
+                  <option key={m.model_id} value={m.model_id}>
+                    {m.slug} · {m.algorithm}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <div style={{ display: 'grid', gap: 8, marginBottom: 10 }}>
+            <div style={{ display: 'grid', gap: 2 }}>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Selected</div>
+              <div style={{ fontWeight: 700 }}>
+                {selectedModelId ? modelById.get(selectedModelId)?.slug ?? selectedModelId : '—'}
+              </div>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => void openModelConfig()}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  opacity: selectedModelId && configAlignmentId ? 0.95 : 0.6,
+                  cursor: selectedModelId && configAlignmentId ? 'pointer' : 'not-allowed',
+                }}
+                title={!configAlignmentId ? 'Нужен alignment (выбери или создай)' : undefined}
+                disabled={!selectedModelId || !configAlignmentId}
+              >
+                Generated cfg
+              </button>
+              <button
+                onClick={() => (selectedModelId ? void openConfigsDrawer('model', selectedModelId) : undefined)}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  opacity: selectedModelId ? 0.95 : 0.6,
+                  cursor: selectedModelId ? 'pointer' : 'not-allowed',
+                }}
+                disabled={!selectedModelId}
+              >
+                Configs (DB)
+              </button>
+              <button
+                onClick={() => void runModelAutotune()}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: 8,
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface)',
+                  color: 'var(--text)',
+                  opacity: selectedModelId ? 0.95 : 0.6,
+                  cursor: selectedModelId ? 'pointer' : 'not-allowed',
+                }}
+                disabled={!selectedModelId || modelAutotuneBusy}
+              >
+                {modelAutotuneBusy ? 'Auto-tuning…' : 'Auto-tune (GPT)'}
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gap: 10 }}>
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>Slug</span>
+              <input value={modelForm.slug} onChange={(e) => setModelForm({ ...modelForm, slug: e.target.value })} />
+            </label>
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>Name</span>
+              <input value={modelForm.name} onChange={(e) => setModelForm({ ...modelForm, name: e.target.value })} />
+            </label>
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>Algorithm</span>
+              <input value={modelForm.algorithm} onChange={(e) => setModelForm({ ...modelForm, algorithm: e.target.value })} placeholder="xgboost" />
+            </label>
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>Tags</span>
+              <input value={modelForm.tags} onChange={(e) => setModelForm({ ...modelForm, tags: e.target.value })} placeholder="xgboost, fast" />
+            </label>
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>Config (JSON)</span>
+              <textarea
+                value={modelForm.config_text}
+                onChange={(e) => setModelForm({ ...modelForm, config_text: e.target.value })}
+                rows={10}
+                style={{ fontFamily: 'monospace' }}
+              />
+            </label>
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                disabled={busy}
+                onClick={() => void saveModel()}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              >
+                {busy ? 'Saving…' : modelForm.mode === 'create' ? 'Create' : 'Save'}
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  setSelectedModelId('')
+                  setModelForm(resetModelForm())
+                  setSelectedAlignmentId('')
+                  setAlignmentForm((prev) => ({ ...resetAlignmentForm(), model_id: '', strategy_id: prev.strategy_id }))
+                }}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              >
+                New
+              </button>
+              <button
+                disabled={busy || !selectedModelId}
+                onClick={() => void deleteSelectedModel()}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </Card>
+
+        <Card>
+          <div style={{ fontWeight: 700, marginBottom: 8 }}>Alignment</div>
+
+          {filteredAlignments.length === 0 ? (
+            <EmptyState title="No alignments" hint="Выбери стратегию и модель, затем создай сонастройку" />
+          ) : (
+            <label style={{ display: 'grid', gap: 4, marginBottom: 10 }}>
+              <span>Pick alignment</span>
+              <select value={selectedAlignmentId} onChange={(e) => applyAlignmentSelection(e.target.value)}>
+                <option value="">New…</option>
+                {filteredAlignments.map((a) => {
+                  const s = strategyById.get(a.strategy_id)
+                  const m = modelById.get(a.model_id)
+                  const label = `${s?.slug ?? a.strategy_id} + ${m?.slug ?? a.model_id} · ${a.status}`
+                  return (
+                    <option key={a.alignment_id} value={a.alignment_id}>
+                      {label}
+                    </option>
+                  )
+                })}
+              </select>
+            </label>
+          )}
+
+          <div style={{ display: 'grid', gap: 10 }}>
+            <div style={{ display: 'grid', gap: 4 }}>
+              <div style={{ fontSize: 12, opacity: 0.8 }}>Selected pair</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 12 }}>
+                <span style={{ fontFamily: 'monospace' }}>{selectedStrategyId ? strategyById.get(selectedStrategyId)?.slug ?? selectedStrategyId : '— strategy —'}</span>
+                <span>+</span>
+                <span style={{ fontFamily: 'monospace' }}>{selectedModelId ? modelById.get(selectedModelId)?.slug ?? selectedModelId : '— model —'}</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <label style={{ display: 'grid', gap: 4, flex: 1, minWidth: 200 }}>
+                <span>FreqAI profile</span>
+                <input value={alignmentForm.profile} onChange={(e) => setAlignmentForm({ ...alignmentForm, profile: e.target.value })} />
+              </label>
+              <label style={{ display: 'grid', gap: 4, width: 180 }}>
+                <span>Status</span>
+                <input value={alignmentForm.status} onChange={(e) => setAlignmentForm({ ...alignmentForm, status: e.target.value })} />
+              </label>
+            </div>
+
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>Scope (JSON, optional)</span>
+              <textarea
+                value={alignmentForm.scope_text}
+                onChange={(e) => setAlignmentForm({ ...alignmentForm, scope_text: e.target.value })}
+                rows={4}
+                style={{ fontFamily: 'monospace' }}
+              />
+            </label>
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>Defaults (JSON, optional)</span>
+              <textarea
+                value={alignmentForm.defaults_text}
+                onChange={(e) => setAlignmentForm({ ...alignmentForm, defaults_text: e.target.value })}
+                rows={6}
+                style={{ fontFamily: 'monospace' }}
+              />
+            </label>
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>Mapping (JSON, optional)</span>
+              <textarea
+                value={alignmentForm.mapping_text}
+                onChange={(e) => setAlignmentForm({ ...alignmentForm, mapping_text: e.target.value })}
+                rows={8}
+                style={{ fontFamily: 'monospace' }}
+              />
+            </label>
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>Freqtrade overrides (JSON)</span>
+              <textarea
+                value={alignmentForm.freqtrade_overrides_text}
+                onChange={(e) => setAlignmentForm({ ...alignmentForm, freqtrade_overrides_text: e.target.value })}
+                rows={6}
+                style={{ fontFamily: 'monospace' }}
+              />
+            </label>
+            <label style={{ display: 'grid', gap: 4 }}>
+              <span>FreqAI overrides (JSON)</span>
+              <textarea
+                value={alignmentForm.freqai_overrides_text}
+                onChange={(e) => setAlignmentForm({ ...alignmentForm, freqai_overrides_text: e.target.value })}
+                rows={6}
+                style={{ fontFamily: 'monospace' }}
+              />
+            </label>
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button
+                disabled={busy || !selectedStrategyId || !selectedModelId}
+                onClick={() => void saveAlignment({ strategy_id: selectedStrategyId, model_id: selectedModelId })}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              >
+                {busy ? 'Saving…' : alignmentForm.mode === 'create' ? 'Create' : 'Save'}
+              </button>
+              <button
+                disabled={busy}
+                onClick={() => {
+                  setSelectedAlignmentId('')
+                  setAlignmentForm({ ...resetAlignmentForm(), strategy_id: selectedStrategyId, model_id: selectedModelId })
+                }}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              >
+                New
+              </button>
+              <button
+                disabled={busy || !selectedAlignmentId}
+                onClick={() => void askAgentsForSelectedAlignment()}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              >
+                Ask agents
+              </button>
+              <button
+                disabled={combinedAutotuneBusy || !selectedAlignmentId}
+                onClick={() => void runCombinedAutotune()}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              >
+                {combinedAutotuneBusy ? 'Combining…' : 'Auto-tune combined'}
+              </button>
+              <button
+                disabled={autotuneBusy || !selectedAlignmentId}
+                onClick={() => void runAutotune()}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              >
+                {autotuneBusy ? 'Auto-tuning…' : 'Auto-tune (GPT)'}
+              </button>
+              <button
+                disabled={repairBusy || !selectedAlignmentId}
+                onClick={() => void runRepair()}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              >
+                {repairBusy ? 'Repair…' : 'Repair last'}
+              </button>
+              <button
+                disabled={generateBusy || !selectedAlignmentId}
+                onClick={() => void runGenerateBot()}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              >
+                {generateBusy ? 'Generating…' : 'Generate bot'}
+              </button>
+              <button
+                disabled={busy || !selectedAlignmentId}
+                onClick={() => void deleteSelectedAlignment()}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              >
+                Delete
+              </button>
+              <button
+                disabled={!selectedAlignmentId}
+                onClick={() => (selectedAlignmentId ? void openConfigsDrawer('alignment', selectedAlignmentId) : undefined)}
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+              >
+                Configs (DB)
+              </button>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Strategy source file drawer */}
+      <div
+        aria-hidden={!strategyConfigBarOpen}
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          height: '100vh',
+          width: 'min(560px, 92vw)',
+          background: 'var(--surface)',
+          borderLeft: '1px solid var(--border)',
+          transform: strategyConfigBarOpen ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 180ms ease',
+          zIndex: 50,
+          padding: 12,
+          display: 'grid',
+          gridTemplateRows: 'auto 1fr',
+          gap: 10,
+          boxSizing: 'border-box',
+        }}
+      >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ display: 'grid', gap: 2 }}>
+                <div style={{ fontWeight: 800 }}>Strategy source file</div>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>Выбери .py из репозитория стратегии перед загрузкой</div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  disabled={!selectedStrategyId || configExportBusy}
+                  onClick={() =>
+                    selectedStrategyId ? void Promise.all([loadStrategySources(selectedStrategyId), loadStrategyFile(selectedStrategyId)]) : undefined
+                  }
+                  style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+                >
+                  {configExportBusy ? 'Loading…' : 'Rescan + Load'}
+                </button>
+                <button
+                  disabled={!strategyFileText.trim()}
+                  onClick={() => {
+                    const filename = strategyFileName || 'Strategy.py'
+                    downloadTextFile(filename, strategyFileText, 'text/x-python')
+                  }}
+                  style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+                >
+                  Download
+                </button>
+                <button
+                  onClick={() => setStrategyConfigBarOpen(false)}
+                  style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: 10, alignContent: 'start' }}>
+              <div style={{ display: 'grid', gap: 6 }}>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>Файлы стратегий (скан репо)</div>
+                <div style={{ maxHeight: 260, overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
+                  {strategySources.length === 0 ? (
+                    <div style={{ fontSize: 12, opacity: 0.7 }}>Нет найденных файлов или ещё не загружено. Нажми Rescan + Load.</div>
+                  ) : (
+                    <div style={{ display: 'grid', gap: 6 }}>
+                      {strategySources.map((item) => {
+                        const active = strategyFilePath === item.path
+                        return (
+                          <button
+                            key={item.path}
+                            onClick={() => void loadStrategyFile(selectedStrategyId, item.path)}
+                            style={{
+                              textAlign: 'left',
+                              borderRadius: 8,
+                              padding: 8,
+                              border: '1px solid var(--border)',
+                              background: active ? 'var(--selected)' : 'var(--surface)',
+                              color: 'var(--text)',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            <div style={{ fontWeight: 700 }}>{item.filename}</div>
+                            <div style={{ fontSize: 12, opacity: 0.8 }}>{item.path}</div>
+                            <div style={{ fontSize: 12, opacity: 0.8 }}>class: {item.strategy_class}</div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ fontSize: 12, opacity: 0.8 }}>
+                selected: <span style={{ fontFamily: 'monospace' }}>{strategyFilePath || '—'}</span>
+              </div>
+              <textarea
+                value={strategyFileText}
+                readOnly
+                placeholder={selectedStrategyId ? 'Выбери файл из списка или нажми Rescan + Load…' : 'Выбери стратегию чтобы загрузить её файлы…'}
+                rows={20}
+                style={{ width: '100%', fontFamily: 'monospace' }}
+              />
+            </div>
+      </div>
+
+      {/* Model config file drawer (freqai) */}
+      <div
+        aria-hidden={!modelConfigBarOpen}
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          height: '100vh',
+          width: 'min(560px, 92vw)',
+          background: 'var(--surface)',
+          borderLeft: '1px solid var(--border)',
+          transform: modelConfigBarOpen ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 180ms ease',
+          zIndex: 50,
+          padding: 12,
+          display: 'grid',
+          gridTemplateRows: 'auto 1fr',
+          gap: 10,
+          boxSizing: 'border-box',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ display: 'grid', gap: 2 }}>
+            <div style={{ fontWeight: 800 }}>Model config file</div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>FreqAI config JSON (по выбранному alignment)</div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              disabled={!configAlignmentId || configExportBusy}
+              onClick={() => (configAlignmentId ? void loadModelConfigFile(configAlignmentId) : undefined)}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+            >
+              {configExportBusy ? 'Loading…' : 'Load'}
+            </button>
+            <button
+              disabled={!modelConfigFileText.trim()}
+              onClick={() => {
+                const filename = modelConfigFileName || 'config.json'
+                downloadTextFile(filename, modelConfigFileText, 'application/json')
+              }}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+            >
+              Download
+            </button>
+            <button
+              onClick={() => setModelConfigBarOpen(false)}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: 8, alignContent: 'start' }}>
+          <div style={{ fontSize: 12, opacity: 0.8 }}>
+            alignment: <span style={{ fontFamily: 'monospace' }}>{configAlignmentId || '—'}</span>
+          </div>
+          <textarea
+            value={modelConfigFileText}
+            readOnly
+            placeholder={configAlignmentId ? 'Нажми Load чтобы получить config.json…' : 'Выбери/создай alignment чтобы собрать config.json…'}
+            rows={28}
+            style={{ width: '100%', fontFamily: 'monospace' }}
+          />
+        </div>
+      </div>
+
+      {/* DB configs drawer (strategy/model/alignment) */}
+      <div
+        aria-hidden={!configDrawerOpen}
+        style={{
+          position: 'fixed',
+          top: 0,
+          right: 0,
+          height: '100vh',
+          width: 'min(620px, 96vw)',
+          background: 'var(--surface)',
+          borderLeft: '1px solid var(--border)',
+          transform: configDrawerOpen ? 'translateX(0)' : 'translateX(100%)',
+          transition: 'transform 180ms ease',
+          zIndex: 60,
+          padding: 12,
+          display: 'grid',
+          gridTemplateRows: 'auto 1fr',
+          gap: 10,
+          boxSizing: 'border-box',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ display: 'grid', gap: 2 }}>
+            <div style={{ fontWeight: 800 }}>Configs (DB)</div>
+            <div style={{ fontSize: 12, opacity: 0.8 }}>
+              scope: <span style={{ fontFamily: 'monospace' }}>{configOwnerScope}</span> · owner: <span style={{ fontFamily: 'monospace' }}>{configOwnerId || '—'}</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => (configOwnerId ? void loadConfigs(configOwnerScope, configOwnerId) : undefined)}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+              disabled={!configOwnerId}
+            >
+              Refresh
+            </button>
+            <button
+              onClick={() => setConfigDrawerOpen(false)}
+              style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gap: 10, gridTemplateRows: '1fr auto' }}>
+          <div style={{ display: 'grid', gap: 8, gridTemplateColumns: '260px 1fr', alignItems: 'start' }}>
+            <div style={{ display: 'grid', gap: 8, maxHeight: '70vh', overflow: 'auto', border: '1px solid var(--border)', borderRadius: 8, padding: 8 }}>
+              {configItems.length === 0 ? (
+                <div style={{ fontSize: 12, opacity: 0.7 }}>Нет сохранённых конфигов. Сохрани новую версию ниже.</div>
+              ) : (
+                configItems.map((cfg) => {
+                  const active = cfg.is_active
+                  return (
+                    <div
+                      key={cfg.config_id}
+                      style={{
+                        border: '1px solid var(--border)',
+                        borderRadius: 8,
+                        padding: 8,
+                        background: active ? 'var(--selected)' : 'var(--surface)',
+                        display: 'grid',
+                        gap: 4,
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
+                        <div style={{ fontWeight: 700 }}>{cfg.name}</div>
+                        <div style={{ fontSize: 11, opacity: 0.8 }}>{new Date(cfg.updated_at ?? cfg.created_at ?? '').toLocaleString()}</div>
+                      </div>
+                      <div style={{ fontSize: 12, opacity: 0.8 }}>id: {cfg.config_id}</div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => {
+                            setConfigContentText(JSON.stringify(cfg.content ?? {}, null, 2))
+                            setConfigFilename(cfg.name || 'config.json')
+                          }}
+                          style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+                        >
+                          Load
+                        </button>
+                        <button
+                          onClick={() => void activateConfigAndRefresh(cfg.config_id)}
+                          disabled={active}
+                          style={{
+                            padding: '6px 8px',
+                            borderRadius: 8,
+                            border: '1px solid var(--border)',
+                            background: active ? 'var(--surface)' : 'var(--surface)',
+                            color: active ? 'var(--text)' : 'var(--text)',
+                            opacity: active ? 0.6 : 1,
+                          }}
+                        >
+                          {active ? 'Active' : 'Make active'}
+                        </button>
+                        <button
+                          onClick={() => {
+                            const filename = cfg.name || 'config.json'
+                            const text = JSON.stringify(cfg.content ?? {}, null, 2)
+                            downloadTextFile(filename, text, 'application/json')
+                          }}
+                          style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)' }}
+                        >
+                          Download
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            <div style={{ display: 'grid', gap: 8 }}>
+              <label style={{ display: 'grid', gap: 4 }}>
+                <span>File name</span>
+                <input value={configFilename} onChange={(e) => setConfigFilename(e.target.value)} />
+              </label>
+              <label style={{ display: 'grid', gap: 4 }}>
+                <span>Content (JSON)</span>
+                <textarea
+                  value={configContentText}
+                  onChange={(e) => setConfigContentText(e.target.value)}
+                  rows={20}
+                  style={{ width: '100%', fontFamily: 'monospace' }}
+                />
+              </label>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <button
+                  onClick={() => void saveNewConfigVersion(configFilename, configContentText, false)}
+                  disabled={!configOwnerId}
+                  style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+                >
+                  Save version
+                </button>
+                <button
+                  onClick={() => void saveNewConfigVersion(configFilename, configContentText, true)}
+                  disabled={!configOwnerId}
+                  style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid var(--border)' }}
+                >
+                  Save + Activate
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
