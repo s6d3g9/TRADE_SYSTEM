@@ -1,4 +1,5 @@
 import json
+import logging
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -11,6 +12,9 @@ from app.models.strategylab import StrategyAlignment, StrategyTemplate
 from app.models.trading import Bot, BotSession
 from app.schemas.trading import BotCreate
 from app.core.config import settings
+
+
+logger = logging.getLogger(__name__)
 
 
 class BotService:
@@ -210,10 +214,15 @@ class BotService:
             
         # Останавливаем контейнер
         try:
-            subprocess.run(["docker", "stop", session.container_name], check=True)
-            subprocess.run(["docker", "rm", session.container_name], check=True)
-        except subprocess.CalledProcessError:
-            pass # Игнорируем ошибки, если контейнер уже удален
+            subprocess.run(["docker", "stop", session.container_name], check=True, capture_output=True, text=True)
+            subprocess.run(["docker", "rm", session.container_name], check=True, capture_output=True, text=True)
+        except subprocess.CalledProcessError as exc:
+            logger.debug(
+                "Failed to stop/remove container %s (ignored): %s | stderr=%s",
+                session.container_name,
+                exc,
+                exc.stderr,
+            )
             
         session.status = "stopped"
         bot.status = "stopped"

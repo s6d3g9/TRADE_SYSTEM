@@ -28,3 +28,4 @@
 - [x] Cleanup services: в `trading_backtest.py` и `freqtrade_data.py` silent `except ...: pass` заменены на `debug`-логирование.
 - [x] Hardening services: `BacktestService.run_backtest` переведен с заглушки на реальный запуск через `trading_backtest`, а `strategylab_export.py` переведен на доменные ошибки.
 - [x] `BotService`: стратегия для `docker run` теперь резолвится из `StrategyAlignment`/`StrategyTemplate`, а `freqtrade_overrides` применяются в generated config.
+- [x] `BotService.stop_bot`: убран silent `pass`, добавлено диагностическое debug-логирование ошибок остановки/удаления контейнера.
