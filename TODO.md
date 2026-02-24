@@ -27,3 +27,4 @@
 - [x] Cleanup workers: удалена неиспользуемая `_set_run_status` и заменены silent `pass` на явное поведение/логирование в `analysis_worker.py` и `graph_worker.py`.
 - [x] Cleanup services: в `trading_backtest.py` и `freqtrade_data.py` silent `except ...: pass` заменены на `debug`-логирование.
 - [x] Hardening services: `BacktestService.run_backtest` переведен с заглушки на реальный запуск через `trading_backtest`, а `strategylab_export.py` переведен на доменные ошибки.
+- [x] `BotService`: стратегия для `docker run` теперь резолвится из `StrategyAlignment`/`StrategyTemplate`, а `freqtrade_overrides` применяются в generated config.

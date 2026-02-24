@@ -1,11 +1,13 @@
 import json
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.core.exceptions import ExternalServiceError, NotFoundError, NotImplementedAppError
+from app.models.strategylab import StrategyAlignment, StrategyTemplate
 from app.models.trading import Bot, BotSession
 from app.schemas.trading import BotCreate
 from app.core.config import settings
@@ -25,6 +27,16 @@ class BotService:
             else Path("freqtrade/user_data")
         ).resolve()
         self.user_data_container_dir = Path(settings.freqtrade_user_data)
+
+    @staticmethod
+    def _merge_dicts(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+        out: dict[str, Any] = dict(base)
+        for key, value in override.items():
+            if key in out and isinstance(out[key], dict) and isinstance(value, dict):
+                out[key] = BotService._merge_dicts(out[key], value)
+            else:
+                out[key] = value
+        return out
         
     async def create_bot(self, bot_in: BotCreate) -> Bot:
         """Создает запись о боте в БД"""
@@ -70,12 +82,32 @@ class BotService:
             "force_entry_enable": True,
             "internals": {
                 "process_throttle_secs": 5
-            }
+            },
+            "strategy": "SampleStrategy",
         }
         
         # Если есть сонастройка (StrategyAlignment), применяем ее
         if bot.alignment_id:
-            raise NotImplementedAppError("StrategyAlignment overrides are not implemented yet")
+            alignment = await self.db.get(StrategyAlignment, bot.alignment_id)
+            if not alignment:
+                raise NotFoundError("StrategyAlignment not found")
+
+            strategy = await self.db.get(StrategyTemplate, alignment.strategy_id)
+            if not strategy:
+                raise NotFoundError("StrategyTemplate not found for alignment")
+
+            strategy_name = (strategy.strategy_class or strategy.slug or strategy.name).strip()
+            if not strategy_name:
+                raise NotImplementedAppError("StrategyAlignment has no resolvable strategy class")
+
+            config["strategy"] = strategy_name
+
+            overrides = alignment.freqtrade_overrides if isinstance(alignment.freqtrade_overrides, dict) else {}
+            if overrides:
+                config = self._merge_dicts(config, overrides)
+
+            # Keep resolved strategy as source of truth for launcher.
+            config["strategy"] = strategy_name
             
         # Сохраняем во временный файл
         config_dir = self.user_data_host_dir / "configs" / "generated"
@@ -97,6 +129,17 @@ class BotService:
             
         # 1. Генерируем конфиг
         config_path = await self.generate_freqtrade_config(bot)
+
+        strategy_name = "SampleStrategy"
+        try:
+            with open(config_path, "r", encoding="utf-8") as fh:
+                cfg = json.load(fh)
+            if isinstance(cfg, dict):
+                val = cfg.get("strategy")
+                if isinstance(val, str) and val.strip():
+                    strategy_name = val.strip()
+        except Exception:
+            strategy_name = "SampleStrategy"
         
         # 2. Создаем сессию в БД
         session = BotSession(bot_id=bot.bot_id, status="starting")
@@ -117,7 +160,7 @@ class BotService:
             "trade",
             "--config",
             str(self.user_data_container_dir / "configs" / "generated" / config_path.name),
-            "--strategy", "SampleStrategy" # TODO: брать из StrategyAlignment
+            "--strategy", strategy_name,
         ]
         
         try:
