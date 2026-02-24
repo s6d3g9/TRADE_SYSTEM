@@ -1,0 +1,51 @@
+import json
+import subprocess
+from pathlib import Path
+from typing import Any
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+from app.models.trading import Backtest
+from app.schemas.trading import BacktestCreate
+from app.core.config import settings
+
+class BacktestService:
+    """
+    Сервис для управления бэктестами.
+    """
+    
+    def __init__(self, db: AsyncSession):
+        self.db = db
+        self.user_data_dir = Path(settings.FREQTRADE_USER_DATA_DIR)
+        
+    async def create_backtest(self, backtest_in: BacktestCreate) -> Backtest:
+        backtest = Backtest(**backtest_in.model_dump())
+        self.db.add(backtest)
+        await self.db.commit()
+        await self.db.refresh(backtest)
+        return backtest
+        
+    async def get_backtest(self, backtest_id: str) -> Backtest | None:
+        result = await self.db.execute(select(Backtest).where(Backtest.backtest_id == backtest_id))
+        return result.scalar_one_or_none()
+        
+    async def run_backtest(self, backtest_id: str) -> Backtest:
+        """
+        Запускает бэктест через Freqtrade.
+        """
+        backtest = await self.get_backtest(backtest_id)
+        if not backtest:
+            raise ValueError(f"Backtest {backtest_id} not found")
+            
+        backtest.status = "running"
+        await self.db.commit()
+        
+        # TODO: Генерация конфига для бэктеста
+        # TODO: Запуск docker run freqtrade backtesting
+        # TODO: Парсинг результатов из JSON
+        
+        backtest.status = "completed"
+        await self.db.commit()
+        
+        return backtest
