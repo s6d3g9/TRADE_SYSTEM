@@ -51,7 +51,7 @@ async def get_config_params(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     service = ConfigParamsService(db)
-    out = await service.get_config_with_params(config_id)
+    out = await service.get_config_with_params(config_id, user_id=current_user.user_id)
     return {
         "config": out["config"],
         "params": out["params"],
@@ -69,6 +69,7 @@ async def save_config_params_as_new_version(
     service = ConfigParamsService(db)
     out = await service.save_params_as_new_version(
         base_config_id=config_id,
+        user_id=current_user.user_id,
         name=payload.name,
         make_active=payload.make_active,
         params=payload.params,
@@ -88,4 +89,4 @@ async def diff_configs(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     service = ConfigParamsService(db)
-    return await service.diff_params(from_config_id, to_config_id)
+    return await service.diff_params(from_config_id, to_config_id, user_id=current_user.user_id)

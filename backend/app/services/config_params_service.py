@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import desc, select, update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BadRequestError, NotFoundError
+from app.core.exceptions import ForbiddenError, NotFoundError
 from app.models.strategylab import ConfigFile
+from app.models.trading import Bot
 from app.schemas.strategylab import ConfigFileOut, ConfigParamBase
 from app.services.config_materializer import (
     apply_params_patch,
@@ -19,10 +20,29 @@ class ConfigParamsService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get_config_with_params(self, config_id: str) -> dict[str, Any]:
+    async def _assert_scope_owner_access(self, *, scope: str, owner_id: str, user_id: str) -> None:
+        if scope in {"strategy", "model"}:
+            return
+        if scope == "alignment":
+            bot = (
+                await self.session.execute(
+                    select(Bot.bot_id).where(Bot.alignment_id == owner_id, Bot.user_id == user_id).limit(1)
+                )
+            ).first()
+            if bot is None:
+                raise ForbiddenError("Config access denied")
+            return
+        raise ForbiddenError("Config access denied")
+
+    async def _assert_config_access(self, *, config: ConfigFile, user_id: str) -> None:
+        await self._assert_scope_owner_access(scope=config.scope, owner_id=config.owner_id, user_id=user_id)
+
+    async def get_config_with_params(self, config_id: str, *, user_id: str) -> dict[str, Any]:
         cfg = await self.session.get(ConfigFile, config_id)
         if not cfg:
             raise NotFoundError("Config not found")
+
+        await self._assert_config_access(config=cfg, user_id=user_id)
 
         params, source = await ensure_materialized(self.session, cfg)
         return {
@@ -35,6 +55,7 @@ class ConfigParamsService:
         self,
         *,
         base_config_id: str,
+        user_id: str,
         name: str | None,
         make_active: bool,
         params: list[ConfigParamBase],
@@ -42,6 +63,8 @@ class ConfigParamsService:
         base = await self.session.get(ConfigFile, base_config_id)
         if not base:
             raise NotFoundError("Base config not found")
+
+        await self._assert_config_access(config=base, user_id=user_id)
 
         patch_items = [(p.path, p.value) for p in params]
         new_content = apply_params_patch(base.content or {}, patch_items)
@@ -84,11 +107,14 @@ class ConfigParamsService:
             "source": source,
         }
 
-    async def diff_params(self, from_config_id: str, to_config_id: str) -> dict[str, Any]:
+    async def diff_params(self, from_config_id: str, to_config_id: str, *, user_id: str) -> dict[str, Any]:
         a = await self.session.get(ConfigFile, from_config_id)
         b = await self.session.get(ConfigFile, to_config_id)
         if not a or not b:
             raise NotFoundError("Config not found")
+
+        await self._assert_config_access(config=a, user_id=user_id)
+        await self._assert_config_access(config=b, user_id=user_id)
 
         a_params, _ = await ensure_materialized(self.session, a)
         b_params, _ = await ensure_materialized(self.session, b)
