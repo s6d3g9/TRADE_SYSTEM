@@ -13,6 +13,7 @@ from app.core.redis import get_redis
 from app.models.analysis import AnalysisRun, TuningSuggestion
 from app.models.strategylab import ConfigFile
 from app.services.config_materializer import materialize_config_params
+from app.services.config_access import assert_scope_owner_access
 from app.models.user import User
 from app.schemas.analysis import (
     AnalysisRunCreate,
@@ -221,6 +222,13 @@ async def create_suggestion(
     if not run or run.user_id != user.user_id:
         raise HTTPException(status_code=404, detail="analysis run not found")
 
+    await assert_scope_owner_access(
+        session,
+        scope=payload.target_scope,
+        owner_id=payload.owner_id,
+        user_id=user.user_id,
+    )
+
     proposed_config_id: str | None = None
     if payload.mint_config_variant and payload.proposed_config_content is not None:
         # Create a config variant (inactive) linked to the target scope/owner.
@@ -314,6 +322,12 @@ async def accept_suggestion(
     if payload.activate and s.proposed_config_id:
         cfg = await session.get(ConfigFile, s.proposed_config_id)
         if cfg:
+            await assert_scope_owner_access(
+                session,
+                scope=cfg.scope,
+                owner_id=cfg.owner_id,
+                user_id=user.user_id,
+            )
             # Deactivate siblings for same scope+owner+regime and activate this one.
             await session.execute(
                 update(ConfigFile)

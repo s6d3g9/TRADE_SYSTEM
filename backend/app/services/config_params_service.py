@@ -5,10 +5,10 @@ from typing import Any
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import ForbiddenError, NotFoundError
+from app.core.exceptions import NotFoundError
 from app.models.strategylab import ConfigFile
-from app.models.trading import Bot
 from app.schemas.strategylab import ConfigFileOut, ConfigParamBase
+from app.services.config_access import assert_scope_owner_access
 from app.services.config_materializer import (
     apply_params_patch,
     ensure_materialized,
@@ -20,22 +20,13 @@ class ConfigParamsService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def _assert_scope_owner_access(self, *, scope: str, owner_id: str, user_id: str) -> None:
-        if scope in {"strategy", "model"}:
-            return
-        if scope == "alignment":
-            bot = (
-                await self.session.execute(
-                    select(Bot.bot_id).where(Bot.alignment_id == owner_id, Bot.user_id == user_id).limit(1)
-                )
-            ).first()
-            if bot is None:
-                raise ForbiddenError("Config access denied")
-            return
-        raise ForbiddenError("Config access denied")
-
     async def _assert_config_access(self, *, config: ConfigFile, user_id: str) -> None:
-        await self._assert_scope_owner_access(scope=config.scope, owner_id=config.owner_id, user_id=user_id)
+        await assert_scope_owner_access(
+            self.session,
+            scope=config.scope,
+            owner_id=config.owner_id,
+            user_id=user_id,
+        )
 
     async def get_config_with_params(self, config_id: str, *, user_id: str) -> dict[str, Any]:
         cfg = await self.session.get(ConfigFile, config_id)
