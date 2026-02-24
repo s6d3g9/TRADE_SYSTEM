@@ -1,8 +1,10 @@
 from pathlib import Path
+from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from app.core.exceptions import NotFoundError, NotImplementedAppError
 from app.models.strategylab import FreqAIModelVariant
 from app.schemas.strategylab import FreqAIModelVariantCreate
 from app.core.config import settings
@@ -22,7 +24,7 @@ class FreqAIService:
         self.user_data_container_dir = Path(settings.freqtrade_user_data)
         
     async def create_model(self, model_in: FreqAIModelVariantCreate) -> FreqAIModelVariant:
-        model = FreqAIModelVariant(**model_in.model_dump())
+        model = FreqAIModelVariant(model_id=uuid4().hex, **model_in.model_dump())
         self.db.add(model)
         await self.db.commit()
         await self.db.refresh(model)
@@ -38,6 +40,6 @@ class FreqAIService:
         """
         model = await self.get_model(model_id)
         if not model:
-            raise ValueError(f"Model {model_id} not found")
+            raise NotFoundError("Model not found")
             
-        raise NotImplementedError("FreqAI training orchestration is not implemented yet")
+        raise NotImplementedAppError("FreqAI training orchestration is not implemented yet")

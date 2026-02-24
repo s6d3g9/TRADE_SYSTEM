@@ -1,10 +1,10 @@
 """Strategy Lab API endpoints"""
-from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_current_user
+from app.core.exceptions import NotFoundError
 from app.models.user import User
 from app.schemas.strategylab import (
     FreqAIModelVariantCreate,
@@ -34,10 +34,7 @@ async def train_model(
     service = FreqAIService(db)
     model = await service.get_model(model_id)
     if not model:
-        raise HTTPException(status_code=404, detail="Model not found")
-        
-    try:
-        await service.train_model(model_id)
-        return {"status": "training_started"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise NotFoundError("Model not found")
+
+    await service.train_model(model_id)
+    return {"status": "training_started"}

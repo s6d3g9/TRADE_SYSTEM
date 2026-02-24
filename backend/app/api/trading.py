@@ -1,16 +1,14 @@
 """Trading API endpoints - comprehensive bot management"""
-from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_current_user
+from app.core.exceptions import ForbiddenError, NotFoundError
 from app.models.user import User
 from app.schemas.trading import (
     BotCreate,
-    BotUpdate,
     Bot as BotSchema,
-    BotSessionCreate,
     BotSession as BotSessionSchema,
     BacktestCreate,
     Backtest as BacktestSchema,
@@ -27,7 +25,7 @@ async def create_bot(
     current_user: User = Depends(get_current_user)
 ):
     """Создает нового торгового бота"""
-    bot_in.user_id = current_user.user_id
+    bot_in = bot_in.model_copy(update={"user_id": current_user.user_id})
     service = BotService(db)
     return await service.create_bot(bot_in)
 
@@ -40,8 +38,10 @@ async def get_bot(
     """Получает информацию о боте"""
     service = BotService(db)
     bot = await service.get_bot(bot_id)
-    if not bot or bot.user_id != current_user.user_id:
-        raise HTTPException(status_code=404, detail="Bot not found")
+    if not bot:
+        raise NotFoundError("Bot not found")
+    if bot.user_id != current_user.user_id:
+        raise ForbiddenError("Bot not found")
     return bot
 
 @router.post("/bots/{bot_id}/start", response_model=BotSessionSchema)
@@ -53,13 +53,12 @@ async def start_bot(
     """Запускает бота (создает сессию и Docker-контейнер)"""
     service = BotService(db)
     bot = await service.get_bot(bot_id)
-    if not bot or bot.user_id != current_user.user_id:
-        raise HTTPException(status_code=404, detail="Bot not found")
-        
-    try:
-        return await service.start_bot(bot_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    if not bot:
+        raise NotFoundError("Bot not found")
+    if bot.user_id != current_user.user_id:
+        raise ForbiddenError("Bot not found")
+
+    return await service.start_bot(bot_id)
 
 @router.post("/bots/{bot_id}/stop")
 async def stop_bot(
@@ -70,14 +69,13 @@ async def stop_bot(
     """Останавливает бота (убивает Docker-контейнер)"""
     service = BotService(db)
     bot = await service.get_bot(bot_id)
-    if not bot or bot.user_id != current_user.user_id:
-        raise HTTPException(status_code=404, detail="Bot not found")
-        
-    try:
-        await service.stop_bot(bot_id)
-        return {"status": "stopped"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    if not bot:
+        raise NotFoundError("Bot not found")
+    if bot.user_id != current_user.user_id:
+        raise ForbiddenError("Bot not found")
+
+    await service.stop_bot(bot_id)
+    return {"status": "stopped"}
 
 @router.post("/backtests", response_model=BacktestSchema)
 async def run_backtest(
@@ -91,12 +89,11 @@ async def run_backtest(
     # Проверяем права на бота
     bot_service = BotService(db)
     bot = await bot_service.get_bot(backtest_in.bot_id)
-    if not bot or bot.user_id != current_user.user_id:
-        raise HTTPException(status_code=404, detail="Bot not found")
+    if not bot:
+        raise NotFoundError("Bot not found")
+    if bot.user_id != current_user.user_id:
+        raise ForbiddenError("Bot not found")
         
     backtest = await service.create_backtest(backtest_in)
-    
-    try:
-        return await service.run_backtest(backtest.backtest_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+
+    return await service.run_backtest(backtest.backtest_id)

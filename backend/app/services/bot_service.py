@@ -1,10 +1,12 @@
 import json
 import subprocess
 from pathlib import Path
+from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
+from app.core.exceptions import ExternalServiceError, NotFoundError, NotImplementedAppError
 from app.models.trading import Bot, BotSession
 from app.schemas.trading import BotCreate
 from app.core.config import settings
@@ -27,7 +29,7 @@ class BotService:
         
     async def create_bot(self, bot_in: BotCreate) -> Bot:
         """Создает запись о боте в БД"""
-        bot = Bot(**bot_in.model_dump())
+        bot = Bot(bot_id=uuid4().hex, **bot_in.model_dump())
         self.db.add(bot)
         await self.db.commit()
         await self.db.refresh(bot)
@@ -74,7 +76,7 @@ class BotService:
         
         # Если есть сонастройка (StrategyAlignment), применяем ее
         if bot.alignment_id:
-            raise NotImplementedError("StrategyAlignment overrides are not implemented yet")
+            raise NotImplementedAppError("StrategyAlignment overrides are not implemented yet")
             
         # Сохраняем во временный файл
         config_dir = self.user_data_host_dir / "configs" / "generated"
@@ -92,16 +94,13 @@ class BotService:
         """
         bot = await self.get_bot(bot_id)
         if not bot:
-            raise ValueError(f"Bot {bot_id} not found")
+            raise NotFoundError("Bot not found")
             
         # 1. Генерируем конфиг
         config_path = await self.generate_freqtrade_config(bot)
         
         # 2. Создаем сессию в БД
-        session = BotSession(
-            bot_id=bot.bot_id,
-            status="starting"
-        )
+        session = BotSession(session_id=uuid4().hex, bot_id=bot.bot_id, status="starting")
         self.db.add(session)
         await self.db.commit()
         await self.db.refresh(session)
@@ -140,7 +139,12 @@ class BotService:
             session.error_message = e.stderr
             bot.status = "failed"
             await self.db.commit()
-            raise RuntimeError(f"Failed to start bot container: {e.stderr}")
+            raise ExternalServiceError(
+                "Failed to start bot container",
+                details={"stderr": e.stderr, "stdout": e.stdout},
+                status_code=502,
+                code="freqtrade_start_failed",
+            )
             
         return session
         
@@ -148,7 +152,7 @@ class BotService:
         """Останавливает Docker-контейнер бота"""
         bot = await self.get_bot(bot_id)
         if not bot:
-            raise ValueError(f"Bot {bot_id} not found")
+            raise NotFoundError("Bot not found")
             
         # Ищем активную сессию
         result = await self.db.execute(
