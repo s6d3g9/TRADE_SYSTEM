@@ -101,6 +101,7 @@ async def get_config_audit(
     action: str | None = Query(default=None),
     created_from: datetime | None = Query(default=None),
     created_to: datetime | None = Query(default=None),
+    order: str = Query(default="desc", pattern="^(asc|desc)$"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
@@ -115,4 +116,5 @@ async def get_config_audit(
         action=action,
         created_from=created_from,
         created_to=created_to,
+        order=order,
     )

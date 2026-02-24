@@ -41,6 +41,7 @@ async def list_config_audit_events(
     action: str | None = None,
     created_from: datetime | None = None,
     created_to: datetime | None = None,
+    order: str = "desc",
 ) -> list[ConfigAuditEvent]:
     cfg = await session.get(ConfigFile, config_id)
     if not cfg:
@@ -56,9 +57,11 @@ async def list_config_audit_events(
     if created_to:
         stmt = stmt.where(ConfigAuditEvent.created_at <= created_to)
 
+    ordering = desc(ConfigAuditEvent.created_at) if order == "desc" else ConfigAuditEvent.created_at
+
     return (
         await session.execute(
-            stmt.order_by(desc(ConfigAuditEvent.created_at)).limit(limit).offset(offset)
+            stmt.order_by(ordering).limit(limit).offset(offset)
         )
     ).scalars().all()
 

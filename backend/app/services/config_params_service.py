@@ -166,6 +166,7 @@ class ConfigParamsService:
         action: str | None = None,
         created_from: datetime | None = None,
         created_to: datetime | None = None,
+        order: str = "desc",
     ) -> dict[str, Any]:
         total = await count_config_audit_events(
             self.session,
@@ -185,6 +186,7 @@ class ConfigParamsService:
             action=action,
             created_from=created_from,
             created_to=created_to,
+            order=order,
         )
         items = [
             {
