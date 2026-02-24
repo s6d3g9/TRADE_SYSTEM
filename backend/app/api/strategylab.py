@@ -1,10 +1,13 @@
 """Strategy Lab API endpoints"""
 
+import csv
+import io
 from datetime import datetime
+import json
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_current_user
@@ -165,4 +168,65 @@ async def export_config_audit(
     return JSONResponse(
         content=jsonable_encoder(payload),
         headers={"Content-Disposition": f'attachment; filename="config-audit-{config_id[:8]}.json"'},
+    )
+
+
+@router.get("/configs/{config_id}/audit/export.csv")
+async def export_config_audit_csv(
+    config_id: str,
+    action: str | None = Query(default=None),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
+    order: str = Query(default="desc", pattern="^(asc|desc)$"),
+    limit: int = Query(1000, ge=1, le=5000),
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    service = ConfigParamsService(db)
+    payload = await service.get_config_audit(
+        config_id,
+        user_id=current_user.user_id,
+        limit=limit,
+        offset=offset,
+        action=action,
+        created_from=created_from,
+        created_to=created_to,
+        order=order,
+    )
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow([
+        "event_id",
+        "config_id",
+        "user_id",
+        "scope",
+        "owner_id",
+        "action",
+        "created_at",
+        "details_json",
+    ])
+
+    for item in payload.get("items", []):
+        writer.writerow(
+            [
+                item.get("event_id"),
+                item.get("config_id"),
+                item.get("user_id"),
+                item.get("scope"),
+                item.get("owner_id"),
+                item.get("action"),
+                item.get("created_at"),
+                json.dumps(item.get("details", {}), ensure_ascii=False),
+            ]
+        )
+
+    content = buffer.getvalue()
+    buffer.close()
+
+    return Response(
+        content=content,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="config-audit-{config_id[:8]}.csv"'},
     )
