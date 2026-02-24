@@ -69,7 +69,7 @@ export const router = createBrowserRouter([
   {
     element: <AppShell />,
     children: [
-      { path: '/', element: <Navigate to="/dashboard/overview" replace /> },
+      { path: '/', element: <Navigate to="/charts/bots-backtests" replace /> },
 
       { path: '/profile', element: <ProfilePage /> },
 
