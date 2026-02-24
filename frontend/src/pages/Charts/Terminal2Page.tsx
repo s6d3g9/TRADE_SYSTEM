@@ -107,6 +107,7 @@ export default function Terminal2Page() {
   const [deployingBot, setDeployingBot] = useState<string | null>(null)
   const [botStatuses, setBotStatuses] = useState<Record<string, any>>({})
   const [togglingBot, setTogglingBot] = useState<string | null>(null)
+  const [runningBacktestBot, setRunningBacktestBot] = useState<string | null>(null)
 
   // Load strategies, alignments and backtests
   useEffect(() => {
@@ -119,7 +120,7 @@ export default function Terminal2Page() {
         const [strategiesRes, alignmentsRes, botsRes, backtestsRes] = await Promise.all([
           fetch('/api/strategylab/strategies?lite=1&limit=200'),
           fetch('/api/strategylab/alignments'),
-          fetch('/api/bots'),
+          fetch('/api/trading/bots'),
           listBacktests({ limit: 100 }),
         ])
 
@@ -143,7 +144,7 @@ export default function Terminal2Page() {
         // Load bot statuses
         for (const bot of botsData) {
           try {
-            const statusRes = await fetch(`/api/bots/${bot.bot_id}/status`)
+            const statusRes = await fetch(`/api/trading/bots/${bot.bot_id}/status`)
             if (statusRes.ok) {
               const statusData = await statusRes.json()
               setBotStatuses(prev => ({ ...prev, [bot.bot_id]: statusData }))
@@ -186,7 +187,7 @@ export default function Terminal2Page() {
       console.log('Bot generated:', bot_id)
       
       // Step 2: Deploy to docker
-      const deployRes = await fetch(`/api/bots/${bot_id}/deploy`, {
+      const deployRes = await fetch(`/api/trading/bots/${bot_id}/deploy`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
       })
@@ -207,7 +208,7 @@ export default function Terminal2Page() {
       }))
       
       // Reload bots list
-      const botsRes = await fetch('/api/bots')
+      const botsRes = await fetch('/api/trading/bots')
       if (botsRes.ok) {
         const botsData = await botsRes.json()
         setBots(botsData)
@@ -225,7 +226,7 @@ export default function Terminal2Page() {
   // Check bot status
   async function checkBotStatus(alignmentId: string, botId: string) {
     try {
-      const res = await fetch(`/api/bots/${botId}/status`)
+      const res = await fetch(`/api/trading/bots/${botId}/status`)
       if (!res.ok) throw new Error('Failed to get status')
       const data = await res.json()
       
@@ -234,7 +235,7 @@ export default function Terminal2Page() {
         [alignmentId]: { bot_id: botId, ...data }
       }))
       
-      alert(`📊 Bot Status:\nContainer: ${data.container_name}\nStatus: ${data.status}\n\nLast logs:\n${data.logs?.split('\n').slice(-5).join('\n') || 'No logs'}`)
+      alert(`📊 Bot Status:\nContainer: ${data.container_name || 'n/a'}\nStatus: ${data.status}`)
     } catch (e) {
       alert(`❌ ${e instanceof Error ? e.message : 'Failed to check status'}`)
     }
@@ -243,7 +244,7 @@ export default function Terminal2Page() {
   // Stop bot
   async function stopBot(alignmentId: string, botId: string) {
     try {
-      const res = await fetch(`/api/bots/${botId}/stop`, { method: 'POST' })
+      const res = await fetch(`/api/trading/bots/${botId}/stop`, { method: 'POST' })
       if (!res.ok) throw new Error('Failed to stop bot')
       const data = await res.json()
       
@@ -264,7 +265,7 @@ export default function Terminal2Page() {
     try {
       if (currentStatus === 'running') {
         // Stop bot
-        const res = await fetch(`/api/bots/${botId}/stop`, { method: 'POST' })
+        const res = await fetch(`/api/trading/bots/${botId}/stop`, { method: 'POST' })
         if (!res.ok) throw new Error('Failed to stop bot')
         
         setBotStatuses(prev => ({
@@ -273,7 +274,7 @@ export default function Terminal2Page() {
         }))
       } else {
         // Deploy/Start bot
-        const res = await fetch(`/api/bots/${botId}/deploy`, { method: 'POST' })
+        const res = await fetch(`/api/trading/bots/${botId}/deploy`, { method: 'POST' })
         if (!res.ok) {
           const error = await res.text()
           throw new Error(`Failed to deploy bot: ${error}`)
@@ -290,6 +291,27 @@ export default function Terminal2Page() {
       alert(`❌ ${e instanceof Error ? e.message : 'Failed to toggle bot'}`)
     } finally {
       setTogglingBot(null)
+    }
+  }
+
+  async function runBacktestForBot(botId: string) {
+    setRunningBacktestBot(botId)
+    try {
+      const qp = new URLSearchParams({ pair, timeframe })
+      const res = await fetch(`/api/trading/bots/${botId}/backtests/run?${qp.toString()}`, { method: 'POST' })
+      if (!res.ok) {
+        const error = await res.text()
+        throw new Error(`Failed to run backtest: ${error}`)
+      }
+
+      const updated = await listBacktests({ limit: 100 })
+      setBacktests(updated.backtests || [])
+      setActiveTab('backtests')
+      alert('✅ Backtest completed and added to list')
+    } catch (e) {
+      alert(`❌ ${e instanceof Error ? e.message : 'Failed to run backtest'}`)
+    } finally {
+      setRunningBacktestBot(null)
     }
   }
 
@@ -1000,8 +1022,30 @@ export default function Terminal2Page() {
                   </div>
                   
                   {/* Action Buttons */}
-                  {status?.bot_id && (
-                    <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        runBacktestForBot(bot.bot_id)
+                      }}
+                      disabled={runningBacktestBot === bot.bot_id}
+                      style={{
+                        flex: 1,
+                        padding: '8px',
+                        borderRadius: 6,
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface)',
+                        color: 'var(--text)',
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: runningBacktestBot === bot.bot_id ? 'not-allowed' : 'pointer',
+                        opacity: runningBacktestBot === bot.bot_id ? 0.6 : 1,
+                      }}
+                    >
+                      {runningBacktestBot === bot.bot_id ? '⏳ Backtest...' : '🧪 Backtest'}
+                    </button>
+
+                    {status?.bot_id && (
                       <button
                         onClick={(e) => {
                           e.stopPropagation()
@@ -1021,8 +1065,8 @@ export default function Terminal2Page() {
                       >
                         📊 Logs
                       </button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               )
             })}
