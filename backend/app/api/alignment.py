@@ -8,11 +8,12 @@ import json
 import re
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
+from app.core.exceptions import NotFoundError
 from app.models.strategylab import FreqAIModelVariant, StrategyAlignment, StrategyTemplate
 
 router = APIRouter(prefix="/alignment", tags=["alignment"])
@@ -256,16 +257,16 @@ async def analyze_alignment(alignment_id: str, session: AsyncSession = Depends(g
     # Get alignment
     alignment = await session.get(StrategyAlignment, alignment_id)
     if not alignment:
-        raise HTTPException(status_code=404, detail=f"Alignment {alignment_id} not found")
+        raise NotFoundError(f"Alignment {alignment_id} not found")
     
     # Get strategy and model
     strategy = await session.get(StrategyTemplate, alignment.strategy_id)
     model = await session.get(FreqAIModelVariant, alignment.model_id)
     
     if not strategy:
-        raise HTTPException(status_code=404, detail=f"Strategy {alignment.strategy_id} not found")
+        raise NotFoundError(f"Strategy {alignment.strategy_id} not found")
     if not model:
-        raise HTTPException(status_code=404, detail=f"Model {alignment.model_id} not found")
+        raise NotFoundError(f"Model {alignment.model_id} not found")
     
     # Extract parameters
     strategy_params = _extract_strategy_params(strategy)
@@ -301,14 +302,14 @@ async def optimize_alignment(alignment_id: str, session: AsyncSession = Depends(
     # Get alignment
     alignment = await session.get(StrategyAlignment, alignment_id)
     if not alignment:
-        raise HTTPException(status_code=404, detail=f"Alignment {alignment_id} not found")
+        raise NotFoundError(f"Alignment {alignment_id} not found")
     
     # Get strategy and model
     strategy = await session.get(StrategyTemplate, alignment.strategy_id)
     model = await session.get(FreqAIModelVariant, alignment.model_id)
     
     if not strategy or not model:
-        raise HTTPException(status_code=404, detail="Strategy or model not found")
+        raise NotFoundError("Strategy or model not found")
     
     # Extract parameters
     strategy_params = _extract_strategy_params(strategy)

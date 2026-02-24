@@ -6,13 +6,14 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, maybe_current_user
 from app.core.config import settings
 from app.core.db import get_db
+from app.core.exceptions import NotFoundError
 from app.models.store import StoreItem, StorePurchase
 from app.models.strategylab import FreqAIModelVariant, StrategyTemplate
 from app.models.user import User
@@ -239,7 +240,7 @@ async def get_item(item_id: str, request: Request, session: AsyncSession = Depen
 
     it = await session.get(StoreItem, item_id)
     if not it or not it.is_active:
-        raise HTTPException(status_code=404, detail="item not found")
+        raise NotFoundError("item not found")
 
     # Purchasers
     purchaser_rows = (
@@ -315,7 +316,7 @@ async def purchase(
 ) -> PurchaseOut:
     it = await session.get(StoreItem, item_id)
     if not it or not it.is_active:
-        raise HTTPException(status_code=404, detail="item not found")
+        raise NotFoundError("item not found")
     
     # Check if already purchased
     existing = (
