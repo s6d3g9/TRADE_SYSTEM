@@ -3,7 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from pydantic import BaseModel, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field, field_serializer
 
 
 # Bot schemas
@@ -35,9 +35,7 @@ class Bot(BotBase):
     bot_id: str
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Bot Session schemas
@@ -72,9 +70,7 @@ class BotSession(BotSessionBase):
     error_message: str | None = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Trade schemas
@@ -126,9 +122,7 @@ class Trade(TradeBase):
     closed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Position schemas
@@ -175,9 +169,7 @@ class Position(PositionBase):
     closed_at: datetime | None = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Backtest schemas
@@ -249,9 +241,7 @@ class Backtest(BacktestBase):
     created_at: datetime
     completed_at: datetime | None = None
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Bot Metric schemas
@@ -280,9 +270,7 @@ class BotMetricCreate(BotMetricBase):
 class BotMetric(BotMetricBase):
     metric_id: int
     timestamp: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Exchange Account schemas
@@ -319,9 +307,7 @@ class ExchangeAccount(ExchangeAccountBase):
     last_balance: Decimal | None = None
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # Response schemas for complex queries

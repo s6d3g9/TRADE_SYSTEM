@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 Connector = Literal["internal", "redis", "http", "file"]
 
@@ -35,9 +35,7 @@ class NeuroProviderOut(NeuroProviderBase):
     stale_rate_5m: float | None = 0
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class ProviderHealth(BaseModel):

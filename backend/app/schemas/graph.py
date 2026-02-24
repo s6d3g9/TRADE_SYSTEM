@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 GraphScope = Literal["user", "bot", "strategy", "model", "alignment"]
@@ -28,9 +28,7 @@ class NodeGraphOut(BaseModel):
     is_active: bool
     created_at: datetime
     updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NodeGraphListOut(BaseModel):
@@ -50,9 +48,7 @@ class NodeGraphVersionOut(BaseModel):
     version: int
     definition: dict[str, Any]
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NodeGraphVersionListOut(BaseModel):
@@ -104,9 +100,7 @@ class NodeGraphRunOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     completed_at: datetime | None = None
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NodeGraphRunListOut(BaseModel):
@@ -150,9 +144,7 @@ class NodeGraphRunNodeOut(BaseModel):
     started_at: datetime | None = None
     updated_at: datetime
     completed_at: datetime | None = None
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class NodeGraphRunNodeListOut(BaseModel):

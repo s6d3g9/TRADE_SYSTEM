@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class StrategyTemplateBase(BaseModel):
@@ -30,6 +30,8 @@ class StrategyTemplateOut(StrategyTemplateBase):
     strategy_id: str
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 class FreqAIModelVariantBase(BaseModel):
@@ -53,6 +55,8 @@ class FreqAIModelVariantOut(FreqAIModelVariantBase):
     model_id: str
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 class StrategyAlignmentBase(BaseModel):
@@ -82,6 +86,8 @@ class StrategyAlignmentOut(StrategyAlignmentBase):
     alignment_id: str
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 class ConfigFileBase(BaseModel):
@@ -107,6 +113,8 @@ class ConfigFileOut(ConfigFileBase):
     config_id: str
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 class ModelAutotunePromptOut(BaseModel):
@@ -116,10 +124,14 @@ class ModelAutotunePromptOut(BaseModel):
     tags: list[str] = Field(default_factory=list)
     system_prompt: str = Field(default="")
     user_prompt_template: str = Field(default="")
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 class ModelAutotunePromptListOut(BaseModel):
     items: list[ModelAutotunePromptOut] = Field(default_factory=list)
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 class ConfigParamBase(BaseModel):
@@ -132,12 +144,16 @@ class ConfigParamOut(ConfigParamBase):
     param_id: str
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 class ConfigParamsOut(BaseModel):
     config: ConfigFileOut
     params: list[ConfigParamOut]
     source: str = Field(default="stored", description="stored|materialized")
+    model_config = ConfigDict(from_attributes=True)
+
 
 
 class ConfigParamsSaveRequest(BaseModel):
@@ -169,3 +185,5 @@ class ConfigFileOut(ConfigFileBase):
     config_id: str
     created_at: datetime | None = None
     updated_at: datetime | None = None
+    model_config = ConfigDict(from_attributes=True)
+
