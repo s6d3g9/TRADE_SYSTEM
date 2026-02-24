@@ -107,7 +107,7 @@ async def get_config_audit(
     current_user: User = Depends(get_current_user),
 ) -> dict:
     service = ConfigParamsService(db)
-    items = await service.get_config_audit(
+    return await service.get_config_audit(
         config_id,
         user_id=current_user.user_id,
         limit=limit,
@@ -116,4 +116,3 @@ async def get_config_audit(
         created_from=created_from,
         created_to=created_to,
     )
-    return {"items": items, "limit": limit, "offset": offset}

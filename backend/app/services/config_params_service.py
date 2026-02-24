@@ -9,7 +9,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import NotFoundError
 from app.models.strategylab import ConfigFile
 from app.schemas.strategylab import ConfigFileOut, ConfigParamBase
-from app.services.config_audit_service import list_config_audit_events, record_config_audit_event
+from app.services.config_audit_service import (
+    count_config_audit_events,
+    list_config_audit_events,
+    record_config_audit_event,
+)
 from app.services.config_access import assert_scope_owner_access
 from app.services.config_materializer import (
     apply_params_patch,
@@ -162,7 +166,16 @@ class ConfigParamsService:
         action: str | None = None,
         created_from: datetime | None = None,
         created_to: datetime | None = None,
-    ) -> list[dict[str, Any]]:
+    ) -> dict[str, Any]:
+        total = await count_config_audit_events(
+            self.session,
+            config_id=config_id,
+            user_id=user_id,
+            action=action,
+            created_from=created_from,
+            created_to=created_to,
+        )
+
         events = await list_config_audit_events(
             self.session,
             config_id=config_id,
@@ -173,7 +186,7 @@ class ConfigParamsService:
             created_from=created_from,
             created_to=created_to,
         )
-        return [
+        items = [
             {
                 "event_id": event.event_id,
                 "config_id": event.config_id,
@@ -186,3 +199,4 @@ class ConfigParamsService:
             }
             for event in events
         ]
+        return {"items": items, "total": total, "limit": limit, "offset": offset}

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.strategylab import ConfigAuditEvent, ConfigFile
@@ -61,3 +61,29 @@ async def list_config_audit_events(
             stmt.order_by(desc(ConfigAuditEvent.created_at)).limit(limit).offset(offset)
         )
     ).scalars().all()
+
+
+async def count_config_audit_events(
+    session: AsyncSession,
+    *,
+    config_id: str,
+    user_id: str,
+    action: str | None = None,
+    created_from: datetime | None = None,
+    created_to: datetime | None = None,
+) -> int:
+    cfg = await session.get(ConfigFile, config_id)
+    if not cfg:
+        return 0
+
+    await assert_scope_owner_access(session, scope=cfg.scope, owner_id=cfg.owner_id, user_id=user_id)
+
+    stmt = select(func.count()).select_from(ConfigAuditEvent).where(ConfigAuditEvent.config_id == config_id)
+    if action:
+        stmt = stmt.where(ConfigAuditEvent.action == action)
+    if created_from:
+        stmt = stmt.where(ConfigAuditEvent.created_at >= created_from)
+    if created_to:
+        stmt = stmt.where(ConfigAuditEvent.created_at <= created_to)
+
+    return (await session.execute(stmt)).scalar() or 0

@@ -175,6 +175,7 @@ class ConfigAuditEventOut(BaseModel):
 
 class ConfigAuditListOut(BaseModel):
     items: list[ConfigAuditEventOut] = Field(default_factory=list)
+    total: int
     limit: int
     offset: int
 
