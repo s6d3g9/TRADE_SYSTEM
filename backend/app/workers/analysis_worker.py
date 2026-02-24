@@ -14,26 +14,11 @@ from app.services.analysis_runner import execute_analysis_run
 
 
 QUEUE_KEY = "analysis:tasks:queue"
+logger = logging.getLogger(__name__)
 
 
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
-
-
-async def _set_run_status(session, run_id: str, status: str) -> bool:
-    """Atomically transition run status.
-
-    Returns True if a row was updated.
-    """
-    result = await session.execute(
-        update(AnalysisRun)
-        .where(
-            (AnalysisRun.run_id == run_id)
-            & (AnalysisRun.status.in_(["queued", "running"]))
-        )
-        .values(status=status, updated_at=_utcnow())
-    )
-    return (result.rowcount or 0) > 0
 
 
 async def _handle_run(run_id: str) -> None:
@@ -103,7 +88,7 @@ async def main() -> None:
             loop.add_signal_handler(sig, _request_stop)
         except NotImplementedError:
             # Windows / limited environments.
-            pass
+            continue
 
     log.info("Worker started; queue=%s", QUEUE_KEY)
 
@@ -122,13 +107,13 @@ async def main() -> None:
     finally:
         try:
             await redis.aclose()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to close redis in analysis worker: %s", exc)
 
         try:
             await get_engine().dispose()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to dispose engine in analysis worker: %s", exc)
 
         log.info("Worker stopped")
 

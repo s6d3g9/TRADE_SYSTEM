@@ -15,6 +15,7 @@ from app.services.graph_run_heartbeat import heartbeat_key, serialize_heartbeat,
 
 
 QUEUE_KEY = "graph:tasks:queue"
+logger = logging.getLogger(__name__)
 
 # Heartbeat lets the UI/backend detect stuck workers even if DB updated_at
 # doesn't move for long-running nodes.
@@ -75,16 +76,16 @@ async def _handle_run(run_id: str) -> None:
             stop_hb.set()
             try:
                 await hb_task
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed to stop heartbeat task for run %s: %s", run_id, exc)
 
             await redis.set(f"graph:run:{run_id}:status", "completed", ex=60 * 60)
         except Exception as e:
             stop_hb.set()
             try:
                 await hb_task
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Failed to stop heartbeat task after run error %s: %s", run_id, exc)
             # Important: do NOT rollback on generic failures.
             # Node-level records and partial outputs are valuable for debugging.
             run = await session.get(NodeGraphRun, run_id)
@@ -132,7 +133,7 @@ async def main() -> None:
         try:
             loop.add_signal_handler(sig, _request_stop)
         except NotImplementedError:
-            pass
+            continue
 
     log.info("Worker started; queue=%s", QUEUE_KEY)
 
@@ -149,12 +150,12 @@ async def main() -> None:
     finally:
         try:
             await redis.aclose()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to close redis in graph worker: %s", exc)
         try:
             await get_engine().dispose()
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to dispose engine in graph worker: %s", exc)
         log.info("Worker stopped")
 
 

@@ -24,3 +24,4 @@
 - [x] Переведены `api/store.py` и `api/alignment.py` с `HTTPException` на доменные ошибки (`NotFoundError`).
 - [x] Переведены `api/ai.py` и `api/auth.py` с `HTTPException` на доменные ошибки (`AppError`-иерархия).
 - [x] Переведен `api/graphs.py` на доменные ошибки; завершен sweep `backend/app/api` по `HTTPException`.
+- [x] Cleanup workers: удалена неиспользуемая `_set_run_status` и заменены silent `pass` на явное поведение/логирование в `analysis_worker.py` и `graph_worker.py`.
