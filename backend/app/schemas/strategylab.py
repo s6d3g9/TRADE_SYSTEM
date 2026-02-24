@@ -99,7 +99,7 @@ class ConfigFileBase(BaseModel):
 
 
 class ConfigFileCreate(ConfigFileBase):
-    pass
+    make_active: bool = Field(default=False)
 
 
 class ConfigFileUpdate(BaseModel):
@@ -178,30 +178,4 @@ class ConfigAuditListOut(BaseModel):
     total: int
     limit: int
     offset: int
-
-
-class ConfigFileBase(BaseModel):
-    scope: str = Field(min_length=1)
-    owner_id: str = Field(min_length=1)
-    name: str = Field(default="config.json", min_length=1)
-    content: dict[str, Any] = Field(default_factory=dict)
-    is_active: bool = Field(default=False)
-
-
-class ConfigFileCreate(ConfigFileBase):
-    make_active: bool = Field(default=False)
-
-
-class ConfigFileUpdate(BaseModel):
-    config_id: str = Field(min_length=1)
-    name: str | None = None
-    content: dict[str, Any] | None = None
-    is_active: bool | None = None
-
-
-class ConfigFileOut(ConfigFileBase):
-    config_id: str
-    created_at: datetime | None = None
-    updated_at: datetime | None = None
-    model_config = ConfigDict(from_attributes=True)
 
