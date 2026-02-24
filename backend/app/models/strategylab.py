@@ -129,6 +129,9 @@ class ConfigFile(Base, TimestampMixin):
     params: Mapped[list["ConfigParam"]] = relationship(
         "ConfigParam", back_populates="config_file", lazy="noload", cascade="all, delete-orphan"
     )
+    audit_events: Mapped[list["ConfigAuditEvent"]] = relationship(
+        "ConfigAuditEvent", back_populates="config_file", lazy="noload", cascade="all, delete-orphan"
+    )
 
 
 class ConfigParam(Base, TimestampMixin):
@@ -156,3 +159,29 @@ class ConfigParam(Base, TimestampMixin):
 
 
     config_file: Mapped["ConfigFile"] = relationship("ConfigFile", back_populates="params", lazy="selectin")
+
+
+class ConfigAuditEvent(Base):
+    __tablename__ = "config_audit_events"
+    __table_args__ = (
+        Index("ix_config_audit_events_config_created", "config_id", "created_at"),
+        Index("ix_config_audit_events_scope_owner_created", "scope", "owner_id", "created_at"),
+        Index("ix_config_audit_events_user_created", "user_id", "created_at"),
+    )
+
+    event_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
+    config_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("config_files.config_id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    user_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("users.user_id", ondelete="SET NULL"), nullable=True, index=True
+    )
+
+    scope: Mapped[str] = mapped_column(String, nullable=False)
+    owner_id: Mapped[str] = mapped_column(String, nullable=False)
+    action: Mapped[str] = mapped_column(String, nullable=False)
+    details: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    config_file: Mapped["ConfigFile | None"] = relationship("ConfigFile", back_populates="audit_events", lazy="selectin")

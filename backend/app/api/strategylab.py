@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, get_current_user
 from app.models.user import User
 from app.schemas.strategylab import (
+    ConfigAuditListOut,
     ConfigParamsOut,
     ConfigParamsSaveRequest,
     FreqAIModelVariantCreate,
@@ -90,3 +91,21 @@ async def diff_configs(
 ) -> dict:
     service = ConfigParamsService(db)
     return await service.diff_params(from_config_id, to_config_id, user_id=current_user.user_id)
+
+
+@router.get("/configs/{config_id}/audit", response_model=ConfigAuditListOut)
+async def get_config_audit(
+    config_id: str,
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict:
+    service = ConfigParamsService(db)
+    items = await service.get_config_audit(
+        config_id,
+        user_id=current_user.user_id,
+        limit=limit,
+        offset=offset,
+    )
+    return {"items": items, "limit": limit, "offset": offset}

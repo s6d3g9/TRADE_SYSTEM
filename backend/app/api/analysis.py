@@ -26,6 +26,7 @@ from app.schemas.analysis import (
     SuggestionOut,
 )
 from app.services.analysis_runner import execute_analysis_run
+from app.services.config_audit_service import record_config_audit_event
 
 
 router = APIRouter(prefix="/analysis", tags=["analysis"])
@@ -339,6 +340,18 @@ async def accept_suggestion(
                 .values(is_active=False)
             )
             cfg.is_active = True
+            await record_config_audit_event(
+                session,
+                user_id=user.user_id,
+                action="config_activated",
+                scope=cfg.scope,
+                owner_id=cfg.owner_id,
+                config_id=cfg.config_id,
+                details={
+                    "source": "analysis_suggestion",
+                    "suggestion_id": s.suggestion_id,
+                },
+            )
 
     await session.commit()
     await session.refresh(s)

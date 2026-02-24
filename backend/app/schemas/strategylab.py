@@ -162,6 +162,23 @@ class ConfigParamsSaveRequest(BaseModel):
     params: list[ConfigParamBase] = Field(default_factory=list)
 
 
+class ConfigAuditEventOut(BaseModel):
+    event_id: str
+    config_id: str | None = None
+    user_id: str | None = None
+    scope: str
+    owner_id: str
+    action: str
+    details: dict[str, Any] = Field(default_factory=dict)
+    created_at: datetime | None = None
+
+
+class ConfigAuditListOut(BaseModel):
+    items: list[ConfigAuditEventOut] = Field(default_factory=list)
+    limit: int
+    offset: int
+
+
 class ConfigFileBase(BaseModel):
     scope: str = Field(min_length=1)
     owner_id: str = Field(min_length=1)
