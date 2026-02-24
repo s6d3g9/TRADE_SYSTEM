@@ -23,3 +23,4 @@
 - [x] Добавлен `UnauthorizedError` и переведены `api/deps.py` + `api/market.py` на доменные ошибки.
 - [x] Переведены `api/store.py` и `api/alignment.py` с `HTTPException` на доменные ошибки (`NotFoundError`).
 - [x] Переведены `api/ai.py` и `api/auth.py` с `HTTPException` на доменные ошибки (`AppError`-иерархия).
+- [x] Переведен `api/graphs.py` на доменные ошибки; завершен sweep `backend/app/api` по `HTTPException`.

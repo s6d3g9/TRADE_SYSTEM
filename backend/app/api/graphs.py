@@ -4,11 +4,12 @@ from datetime import datetime, timezone
 from datetime import timedelta
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
+from app.core.exceptions import BadRequestError, NotFoundError, UnprocessableEntityError
 from app.core.redis import get_redis
 from app.models.graph import NodeGraph, NodeGraphRun, NodeGraphRunNode, NodeGraphVersion
 from app.models.user import User
@@ -128,7 +129,7 @@ async def create_alignment_backtest_template_run(
 ) -> NodeGraphRun:
     alignment_id = str(payload.alignment_id or "").strip()
     if not alignment_id:
-        raise HTTPException(status_code=422, detail="alignment_id is required")
+        raise UnprocessableEntityError("alignment_id is required")
 
     name = (payload.name or "Alignment Backtest").strip() or "Alignment Backtest"
 
@@ -302,7 +303,7 @@ async def get_graph(
 ) -> NodeGraph:
     g = await session.get(NodeGraph, graph_id)
     if not g or g.user_id != user.user_id:
-        raise HTTPException(status_code=404, detail="graph not found")
+        raise NotFoundError("graph not found")
     return g
 
 
@@ -315,7 +316,7 @@ async def create_graph_version(
 ) -> NodeGraphVersion:
     g = await session.get(NodeGraph, graph_id)
     if not g or g.user_id != user.user_id:
-        raise HTTPException(status_code=404, detail="graph not found")
+        raise NotFoundError("graph not found")
 
     # Next version = max + 1
     max_stmt = select(func.max(NodeGraphVersion.version)).where(NodeGraphVersion.graph_id == graph_id)
@@ -342,7 +343,7 @@ async def list_graph_versions(
 ) -> dict:
     g = await session.get(NodeGraph, graph_id)
     if not g or g.user_id != user.user_id:
-        raise HTTPException(status_code=404, detail="graph not found")
+        raise NotFoundError("graph not found")
 
     stmt = select(NodeGraphVersion).where(NodeGraphVersion.graph_id == graph_id)
     count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -366,7 +367,7 @@ async def create_graph_run(
 ) -> NodeGraphRun:
     g = await session.get(NodeGraph, graph_id)
     if not g or g.user_id != user.user_id:
-        raise HTTPException(status_code=404, detail="graph not found")
+        raise NotFoundError("graph not found")
 
     version_id = payload.version_id
     if not version_id:
@@ -378,12 +379,12 @@ async def create_graph_run(
         )
         version = (await session.execute(latest_stmt)).scalars().first()
         if not version:
-            raise HTTPException(status_code=400, detail="graph has no versions")
+            raise BadRequestError("graph has no versions")
         version_id = version.version_id
 
     v = await session.get(NodeGraphVersion, version_id)
     if not v or v.graph_id != graph_id:
-        raise HTTPException(status_code=404, detail="graph version not found")
+        raise NotFoundError("graph version not found")
 
     if payload.idempotency_key:
         now = _utcnow()
@@ -463,7 +464,7 @@ async def get_graph_run(
 ) -> NodeGraphRun:
     r = await session.get(NodeGraphRun, run_id)
     if not r or r.user_id != user.user_id:
-        raise HTTPException(status_code=404, detail="graph run not found")
+        raise NotFoundError("graph run not found")
     return r
 
 
@@ -475,7 +476,7 @@ async def get_graph_run_progress(
 ) -> dict:
     r = await session.get(NodeGraphRun, run_id)
     if not r or r.user_id != user.user_id:
-        raise HTTPException(status_code=404, detail="graph run not found")
+        raise NotFoundError("graph run not found")
 
     redis = get_redis()
     redis_status = await redis.get(f"graph:run:{run_id}:status")
@@ -544,7 +545,7 @@ async def list_graph_run_nodes(
 ) -> dict:
     r = await session.get(NodeGraphRun, run_id)
     if not r or r.user_id != user.user_id:
-        raise HTTPException(status_code=404, detail="graph run not found")
+        raise NotFoundError("graph run not found")
 
     stmt = select(NodeGraphRunNode).where(NodeGraphRunNode.run_id == run_id).order_by(NodeGraphRunNode.created_at)
     items = (await session.execute(stmt)).scalars().all()
@@ -562,7 +563,7 @@ async def get_graph_run_execution(
 ) -> dict:
     r = await session.get(NodeGraphRun, run_id)
     if not r or r.user_id != user.user_id:
-        raise HTTPException(status_code=404, detail="graph run not found")
+        raise NotFoundError("graph run not found")
 
     stmt = select(NodeGraphRunNode).where(NodeGraphRunNode.run_id == run_id).order_by(NodeGraphRunNode.created_at)
     nodes = (await session.execute(stmt)).scalars().all()

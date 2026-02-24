@@ -30,6 +30,11 @@ class UnauthorizedError(AppError):
         super().__init__(status_code=401, code="unauthorized", message=message, details=details)
 
 
+class UnprocessableEntityError(AppError):
+    def __init__(self, message: str = "Unprocessable entity", *, details: dict[str, Any] | None = None) -> None:
+        super().__init__(status_code=422, code="unprocessable_entity", message=message, details=details)
+
+
 class BadRequestError(AppError):
     def __init__(self, message: str = "Bad request", *, details: dict[str, Any] | None = None) -> None:
         super().__init__(status_code=400, code="bad_request", message=message, details=details)
