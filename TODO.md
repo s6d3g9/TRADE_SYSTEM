@@ -26,3 +26,4 @@
 - [x] Переведен `api/graphs.py` на доменные ошибки; завершен sweep `backend/app/api` по `HTTPException`.
 - [x] Cleanup workers: удалена неиспользуемая `_set_run_status` и заменены silent `pass` на явное поведение/логирование в `analysis_worker.py` и `graph_worker.py`.
 - [x] Cleanup services: в `trading_backtest.py` и `freqtrade_data.py` silent `except ...: pass` заменены на `debug`-логирование.
+- [x] Hardening services: `BacktestService.run_backtest` переведен с заглушки на реальный запуск через `trading_backtest`, а `strategylab_export.py` переведен на доменные ошибки.

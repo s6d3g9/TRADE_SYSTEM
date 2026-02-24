@@ -4,12 +4,9 @@ from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.exceptions import NotFoundError
 from app.models.strategylab import FreqAIModelVariant, StrategyAlignment, StrategyTemplate
 from app.schemas.strategylab import FreqAIModelVariantOut, StrategyAlignmentOut, StrategyTemplateOut
-
-
-class AlignmentExportError(Exception):
-    pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,11 +19,11 @@ class AlignmentTriplet:
 async def load_alignment_triplet(session: AsyncSession, alignment_id: str) -> AlignmentTriplet:
     a = await session.get(StrategyAlignment, alignment_id)
     if not a:
-        raise AlignmentExportError("alignment not found")
+        raise NotFoundError("alignment not found")
     s = await session.get(StrategyTemplate, a.strategy_id)
     m = await session.get(FreqAIModelVariant, a.model_id)
     if not s or not m:
-        raise AlignmentExportError("alignment references missing strategy/model")
+        raise NotFoundError("alignment references missing strategy/model")
     return AlignmentTriplet(alignment=a, strategy=s, model=m)
 
 
