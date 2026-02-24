@@ -3,6 +3,8 @@
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, get_current_user
@@ -95,6 +97,23 @@ async def diff_configs(
     return await service.diff_params(from_config_id, to_config_id, user_id=current_user.user_id)
 
 
+@router.get("/configs/diff/export")
+async def export_diff_configs(
+    from_config_id: str = Query(..., alias="from"),
+    to_config_id: str = Query(..., alias="to"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> JSONResponse:
+    service = ConfigParamsService(db)
+    payload = await service.diff_params(from_config_id, to_config_id, user_id=current_user.user_id)
+    return JSONResponse(
+        content=jsonable_encoder(payload),
+        headers={
+            "Content-Disposition": f'attachment; filename="config-diff-{from_config_id[:8]}-{to_config_id[:8]}.json"'
+        },
+    )
+
+
 @router.get("/configs/{config_id}/audit", response_model=ConfigAuditListOut)
 async def get_config_audit(
     config_id: str,
@@ -117,4 +136,33 @@ async def get_config_audit(
         created_from=created_from,
         created_to=created_to,
         order=order,
+    )
+
+
+@router.get("/configs/{config_id}/audit/export")
+async def export_config_audit(
+    config_id: str,
+    action: str | None = Query(default=None),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
+    order: str = Query(default="desc", pattern="^(asc|desc)$"),
+    limit: int = Query(1000, ge=1, le=5000),
+    offset: int = 0,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> JSONResponse:
+    service = ConfigParamsService(db)
+    payload = await service.get_config_audit(
+        config_id,
+        user_id=current_user.user_id,
+        limit=limit,
+        offset=offset,
+        action=action,
+        created_from=created_from,
+        created_to=created_to,
+        order=order,
+    )
+    return JSONResponse(
+        content=jsonable_encoder(payload),
+        headers={"Content-Disposition": f'attachment; filename="config-audit-{config_id[:8]}.json"'},
     )
