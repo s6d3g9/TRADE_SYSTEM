@@ -1,5 +1,7 @@
 """Strategy Lab API endpoints"""
 
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -96,6 +98,9 @@ async def diff_configs(
 @router.get("/configs/{config_id}/audit", response_model=ConfigAuditListOut)
 async def get_config_audit(
     config_id: str,
+    action: str | None = Query(default=None),
+    created_from: datetime | None = Query(default=None),
+    created_to: datetime | None = Query(default=None),
     limit: int = Query(50, ge=1, le=200),
     offset: int = 0,
     db: AsyncSession = Depends(get_db),
@@ -107,5 +112,8 @@ async def get_config_audit(
         user_id=current_user.user_id,
         limit=limit,
         offset=offset,
+        action=action,
+        created_from=created_from,
+        created_to=created_to,
     )
     return {"items": items, "limit": limit, "offset": offset}

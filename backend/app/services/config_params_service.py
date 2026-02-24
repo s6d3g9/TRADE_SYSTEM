@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select, update
@@ -151,13 +152,26 @@ class ConfigParamsService:
             "changed": [{"path": k, "old": a_map[k], "new": b_map[k]} for k in changed],
         }
 
-    async def get_config_audit(self, config_id: str, *, user_id: str, limit: int, offset: int) -> list[dict[str, Any]]:
+    async def get_config_audit(
+        self,
+        config_id: str,
+        *,
+        user_id: str,
+        limit: int,
+        offset: int,
+        action: str | None = None,
+        created_from: datetime | None = None,
+        created_to: datetime | None = None,
+    ) -> list[dict[str, Any]]:
         events = await list_config_audit_events(
             self.session,
             config_id=config_id,
             user_id=user_id,
             limit=limit,
             offset=offset,
+            action=action,
+            created_from=created_from,
+            created_to=created_to,
         )
         return [
             {
