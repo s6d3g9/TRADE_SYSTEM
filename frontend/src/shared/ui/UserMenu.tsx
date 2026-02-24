@@ -195,10 +195,7 @@ export default function UserMenu() {
               <ThemeMenu />
             </div>
             <MenuLink href="/profile" icon="👤" label="Profile" onClick={() => setOpen(false)} />
-            <MenuLink href="/dashboard/overview" icon="📊" label="Dashboard" onClick={() => setOpen(false)} />
-            <MenuLink href="/strategylab/combinator" icon="🤖" label="My Bots" onClick={() => setOpen(false)} />
-            <MenuLink href="/strategylab/graphs" icon="🧩" label="Node Graphs" onClick={() => setOpen(false)} />
-            <MenuLink href="/admin/users" icon="⚙️" label="Settings" onClick={() => setOpen(false)} />
+            <MenuLink href="/charts/bots-backtests" icon="🤖" label="Bots + Backtests" onClick={() => setOpen(false)} />
           </div>
 
           <div style={{
