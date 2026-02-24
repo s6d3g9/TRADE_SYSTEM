@@ -31,6 +31,7 @@ const ROUTES: Array<{ path: string; section: string; title: string }> = [
   { path: '/data/artifacts', section: 'Data', title: 'Artifacts' },
   { path: '/charts/terminal', section: 'Charts', title: 'Terminal' },
   { path: '/charts/terminal2', section: 'Charts', title: 'Terminal 2' },
+  { path: '/charts/bots-backtests', section: 'Charts', title: 'Bots + Backtests' },
   { path: '/logs/viewer', section: 'Logs & Audit', title: 'Logs Viewer' },
   { path: '/logs/audit', section: 'Logs & Audit', title: 'Audit Trail' },
   { path: '/settings/account', section: 'Settings', title: 'Account' },

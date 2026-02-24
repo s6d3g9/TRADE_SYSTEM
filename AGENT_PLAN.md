@@ -31,5 +31,6 @@
 - [x] Внедрение RAG (pgvector + Gemini).
 - [x] Синергия с GitHub Copilot (`.github/copilot-instructions.md`).
 - [x] Собран MVP продуктовый контур в `Terminal2`: deploy бота в контейнере, запуск backtest по боту, визуализация сделок (entry/exit) на графике.
+- [x] Вынесен отдельный минимальный рабочий экран `/charts/bots-backtests` для сценария Bot → Backtest → Trades on Chart.
 - [ ] Найти и удалить пустые/неиспользуемые функции в `backend/`.
 - [ ] Настроить базовый RAG-индексатор (опционально, следующий этап).

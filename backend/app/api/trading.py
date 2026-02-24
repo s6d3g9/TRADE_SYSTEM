@@ -1,6 +1,10 @@
 """Trading API endpoints - comprehensive bot management"""
 
 from datetime import datetime, timedelta, timezone
+import json
+from pathlib import Path
+import zipfile
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
@@ -21,6 +25,78 @@ from app.services.bot_service import BotService
 from app.services.backtest_service import BacktestService
 
 router = APIRouter(prefix="/trading", tags=["trading"])
+
+
+def _read_result_payload(result_path: str | None) -> dict[str, Any]:
+    if not result_path:
+        return {}
+
+    file_path = Path(result_path)
+    if not file_path.exists() or not file_path.is_file():
+        return {}
+
+    if file_path.suffix == ".zip":
+        with zipfile.ZipFile(file_path, "r") as zf:
+            json_files = [n for n in zf.namelist() if n.endswith(".json") and not n.endswith("_config.json")]
+            if not json_files:
+                return {}
+            with zf.open(json_files[0]) as jf:
+                data = json.load(jf)
+                return data if isinstance(data, dict) else {}
+
+    with open(file_path, "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+        return data if isinstance(data, dict) else {}
+
+
+def _extract_trades(obj: Any) -> list[dict[str, Any]]:
+    if isinstance(obj, list):
+        if obj and isinstance(obj[0], dict):
+            sample = obj[0]
+            is_trade = any(
+                key in sample
+                for key in (
+                    "open_date",
+                    "open_date_utc",
+                    "close_date",
+                    "close_date_utc",
+                    "open_rate",
+                    "profit_ratio",
+                )
+            )
+            if is_trade:
+                return [item for item in obj if isinstance(item, dict)]
+        for value in obj:
+            found = _extract_trades(value)
+            if found:
+                return found
+        return []
+
+    if isinstance(obj, dict):
+        for key in ("trades", "trades_list"):
+            value = obj.get(key)
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+        for value in obj.values():
+            found = _extract_trades(value)
+            if found:
+                return found
+    return []
+
+
+def _normalize_trade(item: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "pair": item.get("pair"),
+        "open_date": item.get("open_date") or item.get("open_date_utc"),
+        "close_date": item.get("close_date") or item.get("close_date_utc"),
+        "open_rate": item.get("open_rate"),
+        "close_rate": item.get("close_rate"),
+        "profit_abs": item.get("profit_abs") or item.get("close_profit_abs"),
+        "profit_ratio": item.get("profit_ratio") or item.get("close_profit"),
+        "is_short": bool(item.get("is_short", False)),
+        "enter_tag": item.get("enter_tag"),
+        "exit_reason": item.get("exit_reason"),
+    }
 
 
 @router.get("/bots", response_model=list[BotSchema])
@@ -195,6 +271,33 @@ async def list_backtests(
         )
     rows = (await db.execute(query)).scalars().all()
     return rows
+
+
+@router.get("/backtests/{backtest_id}/detail")
+async def get_backtest_detail(
+    backtest_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    backtest = await db.get(Backtest, backtest_id)
+    if not backtest:
+        raise NotFoundError("Backtest not found")
+    if backtest.user_id != current_user.user_id:
+        raise ForbiddenError("Backtest not found")
+
+    payload = _read_result_payload(backtest.result_file_path)
+    trades = [_normalize_trade(item) for item in _extract_trades(payload)]
+    return {
+        "backtest_id": backtest.backtest_id,
+        "status": backtest.status,
+        "strategy_name": backtest.strategy_name,
+        "pair": backtest.pair,
+        "timeframe": backtest.timeframe,
+        "created_at": backtest.created_at,
+        "completed_at": backtest.completed_at,
+        "trades": trades,
+        "data": payload,
+    }
 
 
 @router.post("/bots/{bot_id}/backtests/run", response_model=BacktestSchema)

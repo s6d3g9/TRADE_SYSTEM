@@ -37,6 +37,7 @@ import ArtifactsPage from '../pages/Data/ArtifactsPage'
 
 import TerminalPage from '../pages/Charts/TerminalPageV2'
 import Terminal2Page from '../pages/Charts/Terminal2Page'
+import BotBacktestWorkspacePage from '../pages/Charts/BotBacktestWorkspacePage'
 
 import StoreGalleryPage from '../pages/Store/StoreGalleryPage'
 import StoreItemPage from '../pages/Store/StoreItemPage'
@@ -104,6 +105,7 @@ export const router = createBrowserRouter([
 
       { path: '/charts/terminal', element: <TerminalPage /> },
       { path: '/charts/terminal2', element: <Terminal2Page /> },
+      { path: '/charts/bots-backtests', element: <BotBacktestWorkspacePage /> },
 
       { path: '/store', element: <StoreGalleryPage /> },
       { path: '/store/items/:itemId', element: <StoreItemPage /> },

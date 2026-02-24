@@ -131,6 +131,9 @@ export default function Sidebar({ onNavigate, globalSearch, onGlobalSearchChange
       <NavLink to="/charts/terminal2" style={linkStyle} onClick={onNavigate}>
         Terminal 2 (TradingView)
       </NavLink>
+      <NavLink to="/charts/bots-backtests" style={linkStyle} onClick={onNavigate}>
+        Bots + Backtests
+      </NavLink>
 
       <div style={{ fontSize: 12, opacity: 0.7, margin: '12px 0 6px' }}>Logs & Audit</div>
       <NavLink to="/logs/viewer" style={linkStyle} onClick={onNavigate}>

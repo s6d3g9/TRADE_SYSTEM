@@ -30,3 +30,4 @@
 - [x] `BotService`: стратегия для `docker run` теперь резолвится из `StrategyAlignment`/`StrategyTemplate`, а `freqtrade_overrides` применяются в generated config.
 - [x] `BotService.stop_bot`: убран silent `pass`, добавлено диагностическое debug-логирование ошибок остановки/удаления контейнера.
 - [x] MVP flow Terminal2: запуск бота в контейнере, запуск бэктеста по боту и отображение точек входа/выхода сделок на графике через согласованные `/strategylab` + `/trading` API.
+- [x] Добавлена отдельная минимальная страница `/charts/bots-backtests` под целевой сценарий: управление ботом, запуск backtest и таблица сделок + entry/exit markers на графике.
