@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, CheckConstraint, DateTime, ForeignKey, Index, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, new_id
@@ -53,6 +53,10 @@ class FreqAIModelVariant(Base, TimestampMixin):
 class StrategyAlignment(Base, TimestampMixin):
     __tablename__ = "strategy_alignments"
 
+    __table_args__ = (
+        CheckConstraint("status IN ('draft','active','archived')", name="ck_strategy_alignments_status"),
+    )
+
     alignment_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
 
     strategy_id: Mapped[str] = mapped_column(
@@ -93,6 +97,9 @@ class ConfigFile(Base, TimestampMixin):
         Index("ix_config_files_owner_active", "scope", "owner_id", "is_active"),
         Index("ix_config_files_regime", "regime"),
         Index("ix_config_files_kind", "kind"),
+        CheckConstraint("scope IN ('strategy','model','alignment')", name="ck_config_files_scope"),
+        CheckConstraint("regime IN ('bull','bear','flat','regular')", name="ck_config_files_regime"),
+        CheckConstraint("kind IN ('base','variant')", name="ck_config_files_kind"),
     )
 
     config_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)

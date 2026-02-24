@@ -16,7 +16,19 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin, new_id
@@ -30,6 +42,12 @@ class Bot(Base, TimestampMixin):
     """Trading bot configuration and state"""
 
     __tablename__ = "bots"
+
+    __table_args__ = (
+        Index("ix_bots_user_status", "user_id", "status"),
+        CheckConstraint("status IN ('created','running','stopped','failed')", name="ck_bots_status"),
+        CheckConstraint("mode IN ('dry_run','live','backtest')", name="ck_bots_mode"),
+    )
 
     bot_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String, nullable=False)
@@ -71,6 +89,11 @@ class BotSession(Base, TimestampMixin):
 
     __tablename__ = "bot_sessions"
 
+    __table_args__ = (
+        Index("ix_bot_sessions_bot_started_at", "bot_id", "started_at"),
+        CheckConstraint("status IN ('starting','running','stopped','failed')", name="ck_bot_sessions_status"),
+    )
+
     session_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     bot_id: Mapped[str] = mapped_column(
         String, ForeignKey("bots.bot_id", ondelete="CASCADE"), nullable=False, index=True
@@ -110,6 +133,13 @@ class Trade(Base, TimestampMixin):
     """Individual trade execution"""
 
     __tablename__ = "trades"
+
+    __table_args__ = (
+        Index("ix_trades_bot_opened_at", "bot_id", "opened_at"),
+        Index("ix_trades_bot_status", "bot_id", "status"),
+        CheckConstraint("status IN ('open','closed','canceled')", name="ck_trades_status"),
+        CheckConstraint("side IN ('buy','sell')", name="ck_trades_side"),
+    )
 
     trade_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
 
@@ -176,6 +206,13 @@ class Position(Base, TimestampMixin):
 
     __tablename__ = "positions"
 
+    __table_args__ = (
+        Index("ix_positions_bot_opened_at", "bot_id", "opened_at"),
+        Index("ix_positions_bot_status", "bot_id", "status"),
+        CheckConstraint("status IN ('open','closing','closed')", name="ck_positions_status"),
+        CheckConstraint("side IN ('long','short')", name="ck_positions_side"),
+    )
+
     position_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
 
     # Relations with ForeignKey
@@ -236,6 +273,12 @@ class Backtest(Base, TimestampMixin):
     """Backtest results - связь с ботом, alignment и пользователем"""
 
     __tablename__ = "backtests"
+
+    __table_args__ = (
+        Index("ix_backtests_user_created_at", "user_id", "created_at"),
+        Index("ix_backtests_bot_created_at", "bot_id", "created_at"),
+        CheckConstraint("status IN ('pending','running','completed','failed')", name="ck_backtests_status"),
+    )
 
     backtest_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
 
