@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.strategylab import ConfigFile, FreqAIModelVariant, StrategyAlignment, StrategyTemplate
 from app.schemas.strategylab import ConfigFileOut
 from app.services.service_errors import ServiceError
+from app.services.config_materializer import materialize_config_params
 
 
 def deep_merge(base: dict, override: dict) -> dict:
@@ -94,6 +95,8 @@ async def build_combined_alignment_config(alignment_id: str, session: AsyncSessi
         is_active=True,
     )
     session.add(cfg)
+    await session.flush()
+    await materialize_config_params(session, cfg)
     await session.commit()
     await session.refresh(cfg)
 
@@ -126,6 +129,8 @@ async def ensure_active_alignment_config(session: AsyncSession, alignment_id: st
             validate_freqtrade_config_payload(normalized)
             cfg.content = normalized
             session.add(cfg)
+            await session.flush()
+            await materialize_config_params(session, cfg)
             await session.commit()
             await session.refresh(cfg)
         return cfg

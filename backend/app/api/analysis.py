@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.redis import get_redis
 from app.models.analysis import AnalysisRun, TuningSuggestion
 from app.models.strategylab import ConfigFile
+from app.services.config_materializer import materialize_config_params
 from app.models.user import User
 from app.schemas.analysis import (
     AnalysisRunCreate,
@@ -236,6 +237,7 @@ async def create_suggestion(
         )
         session.add(cfg)
         await session.flush()
+        await materialize_config_params(session, cfg)
         proposed_config_id = cfg.config_id
 
     s = TuningSuggestion(
