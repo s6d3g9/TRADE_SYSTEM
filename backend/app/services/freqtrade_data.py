@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 from pathlib import Path
@@ -9,6 +10,7 @@ from typing import Awaitable, Callable
 
 
 LogFn = Callable[[str], Awaitable[None]]
+logger = logging.getLogger(__name__)
 
 
 SUPPORTED_TIMEFRAMES = {
@@ -104,8 +106,8 @@ def resolve_required_timeframes(*, config: dict, strategy_path: Path | None, bas
     if strategy_path and strategy_path.exists():
         try:
             out.extend(extract_timeframes_from_strategy_source(strategy_path.read_text("utf-8", errors="ignore")))
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed to read strategy source for timeframe extraction (%s): %s", strategy_path, exc)
 
     uniq: list[str] = []
     seen = set()

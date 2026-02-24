@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import subprocess
 from datetime import datetime, timezone
 from datetime import timedelta
@@ -15,6 +16,9 @@ from app.core.config import settings
 from app.models.trading import Backtest, Bot
 from app.services.backtest_parser import parse_backtest_file
 from app.services.service_errors import ServiceError
+
+
+logger = logging.getLogger(__name__)
 
 
 def _get_freqtrade_user_data() -> Path:
@@ -85,8 +89,8 @@ def _parse_dt(value: object) -> datetime | None:
         try:
             dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
             return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
-        except Exception:
-            pass
+        except Exception as exc:
+            logger.debug("Failed ISO datetime parse for value %r: %s", s, exc)
         for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
             try:
                 return datetime.strptime(s, fmt).replace(tzinfo=timezone.utc)
@@ -158,8 +162,8 @@ def _extract_timeframes(config: dict) -> list[str]:
                         s = str(v).strip()
                         if s:
                             out.append(s)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Failed to extract timeframes from freqai config: %s", exc)
 
     # Deduplicate preserving order
     seen: set[str] = set()
@@ -263,8 +267,8 @@ async def run_backtest_for_bot(
         pair_whitelist = config.get("pair_whitelist")
         if isinstance(pair_whitelist, list) and pair_whitelist:
             pair_value = str(pair_whitelist[0])
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.debug("Failed to extract pair whitelist for backtest run %s: %s", bot_id, exc)
 
     container_name = f"backtest-{bot_id}-{int(datetime.now(timezone.utc).timestamp())}"
 
