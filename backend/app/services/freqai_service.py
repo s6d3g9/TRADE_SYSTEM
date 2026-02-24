@@ -1,7 +1,4 @@
-import json
-import subprocess
 from pathlib import Path
-from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -17,7 +14,12 @@ class FreqAIService:
     
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.user_data_dir = Path(settings.FREQTRADE_USER_DATA_DIR)
+        self.user_data_host_dir = (
+            Path(settings.freqtrade_user_data_host)
+            if settings.freqtrade_user_data_host
+            else Path("freqtrade/user_data")
+        ).resolve()
+        self.user_data_container_dir = Path(settings.freqtrade_user_data)
         
     async def create_model(self, model_in: FreqAIModelVariantCreate) -> FreqAIModelVariant:
         model = FreqAIModelVariant(**model_in.model_dump())
@@ -38,6 +40,4 @@ class FreqAIService:
         if not model:
             raise ValueError(f"Model {model_id} not found")
             
-        # TODO: Генерация конфига для обучения
-        # TODO: Запуск docker run freqtrade trade --freqaimodel
-        pass
+        raise NotImplementedError("FreqAI training orchestration is not implemented yet")

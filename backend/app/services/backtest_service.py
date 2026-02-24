@@ -1,7 +1,4 @@
-import json
-import subprocess
 from pathlib import Path
-from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -17,7 +14,12 @@ class BacktestService:
     
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.user_data_dir = Path(settings.FREQTRADE_USER_DATA_DIR)
+        self.user_data_host_dir = (
+            Path(settings.freqtrade_user_data_host)
+            if settings.freqtrade_user_data_host
+            else Path("freqtrade/user_data")
+        ).resolve()
+        self.user_data_container_dir = Path(settings.freqtrade_user_data)
         
     async def create_backtest(self, backtest_in: BacktestCreate) -> Backtest:
         backtest = Backtest(**backtest_in.model_dump())

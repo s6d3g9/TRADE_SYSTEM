@@ -1,15 +1,14 @@
 import json
-import os
 import subprocess
 from pathlib import Path
-from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.models.trading import Bot, BotSession
-from app.schemas.trading import BotCreate, BotUpdate
+from app.schemas.trading import BotCreate
 from app.core.config import settings
+
 
 class BotService:
     """
@@ -19,7 +18,12 @@ class BotService:
     
     def __init__(self, db: AsyncSession):
         self.db = db
-        self.user_data_dir = Path(settings.FREQTRADE_USER_DATA_DIR)
+        self.user_data_host_dir = (
+            Path(settings.freqtrade_user_data_host)
+            if settings.freqtrade_user_data_host
+            else Path("freqtrade/user_data")
+        ).resolve()
+        self.user_data_container_dir = Path(settings.freqtrade_user_data)
         
     async def create_bot(self, bot_in: BotCreate) -> Bot:
         """Создает запись о боте в БД"""
@@ -70,11 +74,10 @@ class BotService:
         
         # Если есть сонастройка (StrategyAlignment), применяем ее
         if bot.alignment_id:
-            # TODO: Загрузить StrategyAlignment и применить overrides
-            pass
+            raise NotImplementedError("StrategyAlignment overrides are not implemented yet")
             
         # Сохраняем во временный файл
-        config_dir = self.user_data_dir / "configs" / "generated"
+        config_dir = self.user_data_host_dir / "configs" / "generated"
         config_dir.mkdir(parents=True, exist_ok=True)
         
         config_path = config_dir / f"config_{bot.bot_id}.json"
@@ -111,10 +114,11 @@ class BotService:
         cmd = [
             "docker", "run", "-d",
             "--name", container_name,
-            "-v", f"{self.user_data_dir.absolute()}:/freqtrade/user_data",
+            "-v", f"{self.user_data_host_dir}:{self.user_data_container_dir}",
             "freqtradeorg/freqtrade:stable",
             "trade",
-            "--config", f"/freqtrade/user_data/configs/generated/{config_path.name}",
+            "--config",
+            str(self.user_data_container_dir / "configs" / "generated" / config_path.name),
             "--strategy", "SampleStrategy" # TODO: брать из StrategyAlignment
         ]
         
