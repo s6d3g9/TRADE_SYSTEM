@@ -5,12 +5,13 @@ from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
+from app.core.exceptions import BadRequestError
 from app.core.redis import get_redis
 from app.models.neuro import NeuroProvider, ProviderBinding
 
@@ -91,7 +92,7 @@ async def ingest(envelope: CanonicalSignalEnvelope, session: AsyncSession = Depe
 async def get_last_signals(provider_id: str, pairs: str | None = Query(default=None)) -> dict[str, Any]:
     redis = get_redis()
     if not pairs:
-        raise HTTPException(status_code=400, detail="pairs query param required")
+        raise BadRequestError("pairs query param required")
 
     pair_list = [p.strip() for p in pairs.split(",") if p.strip()]
     out: dict[str, Any] = {"provider_id": provider_id, "signals": {}}
@@ -105,7 +106,7 @@ async def get_last_signals(provider_id: str, pairs: str | None = Query(default=N
 @router.get("/bots/{bot_id}/last")
 async def get_last_signals_for_bot(bot_id: str, pairs: str | None = Query(default=None), session: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     if not pairs:
-        raise HTTPException(status_code=400, detail="pairs query param required")
+        raise BadRequestError("pairs query param required")
 
     binding = await session.scalar(select(ProviderBinding).where(ProviderBinding.bot_id == bot_id))
     if not binding or not binding.provider_id:

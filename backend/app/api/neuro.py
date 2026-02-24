@@ -3,12 +3,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
+from app.core.exceptions import BadRequestError, ConflictError, NotFoundError
 from app.models.neuro import NeuroProvider
 from app.schemas.neuro import (
     NeuroProviderCreate,
@@ -116,7 +117,7 @@ async def list_providers(session: AsyncSession = Depends(get_db)) -> list[dict[s
 @router.post("/providers")
 async def create_provider(p: NeuroProviderCreate, session: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     if p.module_type not in {m["module_type"] for m in MODULES}:
-        raise HTTPException(status_code=400, detail="unknown module_type")
+        raise BadRequestError("unknown module_type")
 
     provider = NeuroProvider(
         provider_id=p.provider_id,
@@ -135,7 +136,7 @@ async def create_provider(p: NeuroProviderCreate, session: AsyncSession = Depend
         await session.commit()
     except IntegrityError:
         await session.rollback()
-        raise HTTPException(status_code=409, detail="provider_id already exists")
+        raise ConflictError("provider_id already exists")
 
     await session.refresh(provider)
     return NeuroProviderOut.model_validate(provider, from_attributes=True).model_dump()
@@ -145,21 +146,21 @@ async def create_provider(p: NeuroProviderCreate, session: AsyncSession = Depend
 async def get_provider(provider_id: str, session: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     provider = await session.get(NeuroProvider, provider_id)
     if not provider:
-        raise HTTPException(status_code=404, detail="provider not found")
+        raise NotFoundError("provider not found")
     return NeuroProviderOut.model_validate(provider, from_attributes=True).model_dump()
 
 
 @router.put("/providers/{provider_id}")
 async def update_provider(provider_id: str, p: NeuroProviderUpdate, session: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     if p.provider_id != provider_id:
-        raise HTTPException(status_code=400, detail="provider_id mismatch")
+        raise BadRequestError("provider_id mismatch")
 
     provider = await session.get(NeuroProvider, provider_id)
     if not provider:
-        raise HTTPException(status_code=404, detail="provider not found")
+        raise NotFoundError("provider not found")
 
     if p.module_type not in {m["module_type"] for m in MODULES}:
-        raise HTTPException(status_code=400, detail="unknown module_type")
+        raise BadRequestError("unknown module_type")
 
     provider.name = p.name
     provider.module_type = p.module_type
@@ -179,7 +180,7 @@ async def update_provider(provider_id: str, p: NeuroProviderUpdate, session: Asy
 async def delete_provider(provider_id: str, session: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     provider = await session.get(NeuroProvider, provider_id)
     if not provider:
-        raise HTTPException(status_code=404, detail="provider not found")
+        raise NotFoundError("provider not found")
     await session.delete(provider)
     await session.commit()
     return {"deleted": True, "provider_id": provider_id}
@@ -189,7 +190,7 @@ async def delete_provider(provider_id: str, session: AsyncSession = Depends(get_
 async def provider_health(provider_id: str, session: AsyncSession = Depends(get_db)) -> dict[str, Any]:
     provider = await session.get(NeuroProvider, provider_id)
     if not provider:
-        raise HTTPException(status_code=404, detail="provider not found")
+        raise NotFoundError("provider not found")
 
     health = ProviderHealth(
         provider_id=provider.provider_id,

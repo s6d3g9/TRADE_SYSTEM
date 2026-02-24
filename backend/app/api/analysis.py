@@ -3,12 +3,13 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query
 from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, get_db
 from app.core.config import settings
+from app.core.exceptions import NotFoundError
 from app.core.redis import get_redis
 from app.models.analysis import AnalysisRun, TuningSuggestion
 from app.models.strategylab import ConfigFile
@@ -146,7 +147,7 @@ async def get_analysis_run(
 ) -> AnalysisRun:
     run = await session.get(AnalysisRun, run_id)
     if not run or run.user_id != user.user_id:
-        raise HTTPException(status_code=404, detail="analysis run not found")
+        raise NotFoundError("analysis run not found")
     return run
 
 @router.get("/runs/{run_id}/progress", response_model=AnalysisRunProgressOut)
@@ -157,7 +158,7 @@ async def get_analysis_run_progress(
 ) -> dict:
     run = await session.get(AnalysisRun, run_id)
     if not run or run.user_id != user.user_id:
-        raise HTTPException(status_code=404, detail="analysis run not found")
+        raise NotFoundError("analysis run not found")
 
     redis = get_redis()
     redis_status = await redis.get(f"analysis:run:{run_id}:status")
@@ -180,7 +181,7 @@ async def execute_analysis_run_now(
 ) -> AnalysisRun:
     run = await session.get(AnalysisRun, run_id)
     if not run or run.user_id != user.user_id:
-        raise HTTPException(status_code=404, detail="analysis run not found")
+        raise NotFoundError("analysis run not found")
 
     if run.status == "completed":
         return run
@@ -221,7 +222,7 @@ async def create_suggestion(
 ) -> TuningSuggestion:
     run = await session.get(AnalysisRun, run_id)
     if not run or run.user_id != user.user_id:
-        raise HTTPException(status_code=404, detail="analysis run not found")
+        raise NotFoundError("analysis run not found")
 
     await assert_scope_owner_access(
         session,
@@ -311,11 +312,11 @@ async def accept_suggestion(
 ) -> TuningSuggestion:
     s = await session.get(TuningSuggestion, suggestion_id)
     if not s:
-        raise HTTPException(status_code=404, detail="suggestion not found")
+        raise NotFoundError("suggestion not found")
 
     run = await session.get(AnalysisRun, s.run_id)
     if not run or run.user_id != user.user_id:
-        raise HTTPException(status_code=404, detail="suggestion not found")
+        raise NotFoundError("suggestion not found")
 
     s.state = "accepted"
     s.updated_at = _utcnow()
