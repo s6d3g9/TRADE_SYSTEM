@@ -25,6 +25,11 @@ class ForbiddenError(AppError):
         super().__init__(status_code=403, code="forbidden", message=message, details=details)
 
 
+class UnauthorizedError(AppError):
+    def __init__(self, message: str = "Unauthorized", *, details: dict[str, Any] | None = None) -> None:
+        super().__init__(status_code=401, code="unauthorized", message=message, details=details)
+
+
 class BadRequestError(AppError):
     def __init__(self, message: str = "Bad request", *, details: dict[str, Any] | None = None) -> None:
         super().__init__(status_code=400, code="bad_request", message=message, details=details)

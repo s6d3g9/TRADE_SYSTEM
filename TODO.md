@@ -20,3 +20,4 @@
 - [x] Удалены дубли схем `ConfigFile*` в `backend/app/schemas/strategylab.py`.
 - [x] Устранен warning Pydantic о поле `schema` в `backend/app/api/signals.py` без ломки API-контракта.
 - [x] Переведены роуты `signals/analysis/neuro` с `HTTPException` на доменные ошибки (`BadRequestError/NotFoundError/ConflictError`).
+- [x] Добавлен `UnauthorizedError` и переведены `api/deps.py` + `api/market.py` на доменные ошибки.

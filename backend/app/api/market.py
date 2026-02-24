@@ -4,10 +4,11 @@ from time import time
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
+from app.core.exceptions import BadRequestError, ExternalServiceError
 from app.schemas.market import AggregateSeriesOut, CandleOut, CandleSeriesOut, Exchange
 from app.services import market_clients
 from app.services.market_clients import SYMBOL_MAP, align_and_average, fetch_candles, resolve_symbol
@@ -72,7 +73,7 @@ async def list_pairs(
     if source.lower() == "discover":
         kind_norm = (kind or "spot").strip().lower()
         if kind_norm not in {"spot", "perp"}:
-            raise HTTPException(status_code=400, detail="invalid kind")
+            raise BadRequestError("invalid kind")
 
         if exchange == "binance":
             if kind_norm == "perp":
@@ -204,7 +205,7 @@ async def get_candles(
     """
     timeframe = timeframe.lower()
     if timeframe not in market_clients.SUPPORTED_TF:
-        raise HTTPException(status_code=400, detail="unsupported timeframe")
+        raise BadRequestError("unsupported timeframe")
 
     # Accept any normalized pair; resolve_symbol will handle conversion.
     # For curated pairs: will use SYMBOL_MAP.
@@ -226,9 +227,9 @@ async def get_candles(
     try:
         candles_raw = await fetch_candles(exchange, pair, timeframe, limit=limit)
     except httpx.HTTPStatusError as exc:
-        raise HTTPException(status_code=502, detail=f"exchange error: {exc.response.status_code}") from exc
+        raise ExternalServiceError(f"exchange error: {exc.response.status_code}") from exc
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise BadRequestError(str(exc)) from exc
     candles = [CandleOut(ts=c.ts, open=c.open, high=c.high, low=c.low, close=c.close, volume=c.volume) for c in candles_raw]
     await set_cached(exchange, pair, timeframe, candles)
     if persist:
@@ -247,17 +248,17 @@ async def get_candles_aggregate(
 ) -> AggregateSeriesOut:
     timeframe = timeframe.lower()
     if timeframe not in market_clients.SUPPORTED_TF:
-        raise HTTPException(status_code=400, detail="unsupported timeframe")
+        raise BadRequestError("unsupported timeframe")
 
     ex_list = [e.strip().lower() for e in exchanges.split(",") if e.strip()]
     if not ex_list:
-        raise HTTPException(status_code=400, detail="no exchanges provided")
+        raise BadRequestError("no exchanges provided")
 
     per_ex: dict[str, list[CandleOut]] = {}
     failures: list[str] = []
     for ex in ex_list:
         if ex not in market_clients.FETCHERS:
-            raise HTTPException(status_code=400, detail=f"unsupported exchange {ex}")
+            raise BadRequestError(f"unsupported exchange {ex}")
         if pair in SYMBOL_MAP and ex not in SYMBOL_MAP[pair]:
             failures.append(f"{ex}:pair-not-supported")
             continue
@@ -292,7 +293,7 @@ async def get_candles_aggregate(
         detail = "no exchange data"
         if failures:
             detail = f"no exchange data; failures: {', '.join(failures)}"
-        raise HTTPException(status_code=502, detail=detail)
+        raise ExternalServiceError(detail)
 
     aligned = align_and_average(
         {

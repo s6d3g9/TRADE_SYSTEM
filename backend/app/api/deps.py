@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.db import get_db
+from app.core.exceptions import UnauthorizedError
 from app.core.security import decode_access_token
 from app.models.user import User
 
@@ -24,16 +25,16 @@ def _get_bearer_token(request: Request) -> str | None:
 async def get_current_user(request: Request, session: AsyncSession = Depends(get_db)) -> User:
     token = _get_bearer_token(request)
     if not token:
-        raise HTTPException(status_code=401, detail="Missing Authorization header")
+        raise UnauthorizedError("Missing Authorization header")
 
     payload = decode_access_token(token)
     user_id = payload.get("sub")
     if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise UnauthorizedError("Invalid token")
 
     user = await session.get(User, user_id)
     if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+        raise UnauthorizedError("User not found")
     return user
 
 
