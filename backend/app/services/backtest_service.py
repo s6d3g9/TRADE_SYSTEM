@@ -1,5 +1,4 @@
 from pathlib import Path
-from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -24,7 +23,7 @@ class BacktestService:
         self.user_data_container_dir = Path(settings.freqtrade_user_data)
         
     async def create_backtest(self, backtest_in: BacktestCreate) -> Backtest:
-        backtest = Backtest(backtest_id=uuid4().hex, **backtest_in.model_dump())
+        backtest = Backtest(**backtest_in.model_dump())
         self.db.add(backtest)
         await self.db.commit()
         await self.db.refresh(backtest)

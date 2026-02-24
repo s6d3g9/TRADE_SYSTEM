@@ -1,7 +1,14 @@
 from __future__ import annotations
+
 from datetime import datetime
+from uuid import uuid4
+
 from sqlalchemy import DateTime, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+
+def new_id() -> str:
+    return uuid4().hex
 
 class Base(DeclarativeBase):
     """

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, TimestampMixin, new_id
 
 if TYPE_CHECKING:
     from app.models.trading import Bot, Backtest
@@ -18,7 +18,7 @@ class StrategyTemplate(Base, TimestampMixin):
         UniqueConstraint("slug", name="uq_strategy_templates_slug"),
     )
 
-    strategy_id: Mapped[str] = mapped_column(String, primary_key=True)
+    strategy_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     slug: Mapped[str] = mapped_column(String, nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
 
@@ -39,7 +39,7 @@ class FreqAIModelVariant(Base, TimestampMixin):
         UniqueConstraint("slug", name="uq_freqai_model_variants_slug"),
     )
 
-    model_id: Mapped[str] = mapped_column(String, primary_key=True)
+    model_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     slug: Mapped[str] = mapped_column(String, nullable=False)
     name: Mapped[str] = mapped_column(String, nullable=False)
 
@@ -53,7 +53,7 @@ class FreqAIModelVariant(Base, TimestampMixin):
 class StrategyAlignment(Base, TimestampMixin):
     __tablename__ = "strategy_alignments"
 
-    alignment_id: Mapped[str] = mapped_column(String, primary_key=True)
+    alignment_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
 
     strategy_id: Mapped[str] = mapped_column(
         String, ForeignKey("strategy_templates.strategy_id", ondelete="CASCADE"), nullable=False, index=True
@@ -95,7 +95,7 @@ class ConfigFile(Base, TimestampMixin):
         Index("ix_config_files_kind", "kind"),
     )
 
-    config_id: Mapped[str] = mapped_column(String, primary_key=True)
+    config_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     scope: Mapped[str] = mapped_column(String, nullable=False)  # strategy, model, alignment
     owner_id: Mapped[str] = mapped_column(String, nullable=False)  # strategy_id, model_id, alignment_id
     name: Mapped[str] = mapped_column(String, nullable=False, server_default="config.json")
@@ -137,7 +137,7 @@ class ConfigParam(Base, TimestampMixin):
         Index("ix_config_params_path", "path"),
     )
 
-    param_id: Mapped[str] = mapped_column(String, primary_key=True)
+    param_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     config_id: Mapped[str] = mapped_column(
         String, ForeignKey("config_files.config_id", ondelete="CASCADE"), nullable=False
     )

@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, TimestampMixin, new_id
 
 if TYPE_CHECKING:
     from app.models.user import User
@@ -31,7 +31,7 @@ class Bot(Base, TimestampMixin):
 
     __tablename__ = "bots"
 
-    bot_id: Mapped[str] = mapped_column(String, primary_key=True)
+    bot_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     name: Mapped[str] = mapped_column(String, nullable=False)
 
     # Relations with ForeignKey
@@ -71,7 +71,7 @@ class BotSession(Base, TimestampMixin):
 
     __tablename__ = "bot_sessions"
 
-    session_id: Mapped[str] = mapped_column(String, primary_key=True)
+    session_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     bot_id: Mapped[str] = mapped_column(
         String, ForeignKey("bots.bot_id", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -111,7 +111,7 @@ class Trade(Base, TimestampMixin):
 
     __tablename__ = "trades"
 
-    trade_id: Mapped[str] = mapped_column(String, primary_key=True)
+    trade_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
 
     # Relations with ForeignKey
     bot_id: Mapped[str] = mapped_column(
@@ -176,7 +176,7 @@ class Position(Base, TimestampMixin):
 
     __tablename__ = "positions"
 
-    position_id: Mapped[str] = mapped_column(String, primary_key=True)
+    position_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
 
     # Relations with ForeignKey
     bot_id: Mapped[str] = mapped_column(
@@ -237,7 +237,7 @@ class Backtest(Base, TimestampMixin):
 
     __tablename__ = "backtests"
 
-    backtest_id: Mapped[str] = mapped_column(String, primary_key=True)
+    backtest_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
 
     # Relations with ForeignKey
     bot_id: Mapped[str | None] = mapped_column(
@@ -357,7 +357,7 @@ class ExchangeAccount(Base, TimestampMixin):
 
     __tablename__ = "exchange_accounts"
 
-    account_id: Mapped[str] = mapped_column(String, primary_key=True)
+    account_id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
 
     # User with ForeignKey
     user_id: Mapped[str] = mapped_column(

@@ -1,7 +1,6 @@
 import json
 import subprocess
 from pathlib import Path
-from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -29,7 +28,7 @@ class BotService:
         
     async def create_bot(self, bot_in: BotCreate) -> Bot:
         """Создает запись о боте в БД"""
-        bot = Bot(bot_id=uuid4().hex, **bot_in.model_dump())
+        bot = Bot(**bot_in.model_dump())
         self.db.add(bot)
         await self.db.commit()
         await self.db.refresh(bot)
@@ -100,7 +99,7 @@ class BotService:
         config_path = await self.generate_freqtrade_config(bot)
         
         # 2. Создаем сессию в БД
-        session = BotSession(session_id=uuid4().hex, bot_id=bot.bot_id, status="starting")
+        session = BotSession(bot_id=bot.bot_id, status="starting")
         self.db.add(session)
         await self.db.commit()
         await self.db.refresh(session)

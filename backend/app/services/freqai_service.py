@@ -1,5 +1,4 @@
 from pathlib import Path
-from uuid import uuid4
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -24,7 +23,7 @@ class FreqAIService:
         self.user_data_container_dir = Path(settings.freqtrade_user_data)
         
     async def create_model(self, model_in: FreqAIModelVariantCreate) -> FreqAIModelVariant:
-        model = FreqAIModelVariant(model_id=uuid4().hex, **model_in.model_dump())
+        model = FreqAIModelVariant(**model_in.model_dump())
         self.db.add(model)
         await self.db.commit()
         await self.db.refresh(model)
