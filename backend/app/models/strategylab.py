@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base
+from app.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.trading import Bot, Backtest
 
 
-class StrategyTemplate(Base):
+class StrategyTemplate(Base, TimestampMixin):
     __tablename__ = "strategy_templates"
     __table_args__ = (
         UniqueConstraint("slug", name="uq_strategy_templates_slug"),
@@ -31,13 +31,9 @@ class StrategyTemplate(Base):
     tags: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     meta: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
 
 
-class FreqAIModelVariant(Base):
+class FreqAIModelVariant(Base, TimestampMixin):
     __tablename__ = "freqai_model_variants"
     __table_args__ = (
         UniqueConstraint("slug", name="uq_freqai_model_variants_slug"),
@@ -52,13 +48,9 @@ class FreqAIModelVariant(Base):
     description: Mapped[str | None] = mapped_column(String, nullable=True)
     tags: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
 
 
-class StrategyAlignment(Base):
+class StrategyAlignment(Base, TimestampMixin):
     __tablename__ = "strategy_alignments"
 
     alignment_id: Mapped[str] = mapped_column(String, primary_key=True)
@@ -81,17 +73,13 @@ class StrategyAlignment(Base):
 
     status: Mapped[str] = mapped_column(String, nullable=False, server_default="draft")
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
 
     # Relationships
     bots: Mapped[list["Bot"]] = relationship("Bot", back_populates="alignment", lazy="noload")
     backtests: Mapped[list["Backtest"]] = relationship("Backtest", back_populates="alignment", lazy="noload")
 
 
-class ConfigFile(Base):
+class ConfigFile(Base, TimestampMixin):
     """Версионированные конфигурации для стратегий, моделей и сонастроек.
     
     Поддерживает:
@@ -121,10 +109,6 @@ class ConfigFile(Base):
         String, ForeignKey("config_files.config_id", ondelete="SET NULL"), nullable=True, index=True
     )
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
 
     # Self-referential relationship для дерева base → variants
     parent: Mapped["ConfigFile | None"] = relationship(
@@ -140,7 +124,7 @@ class ConfigFile(Base):
     )
 
 
-class ConfigParam(Base):
+class ConfigParam(Base, TimestampMixin):
     """Materialized (path,value) rows for a specific ConfigFile version.
 
     The UI can use these rows for table editing and diffing.
@@ -163,9 +147,5 @@ class ConfigParam(Base):
     value: Mapped[object] = mapped_column(JSON, nullable=False)
     value_type: Mapped[str] = mapped_column(String, nullable=False, server_default="json")
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
 
     config_file: Mapped["ConfigFile"] = relationship("ConfigFile", back_populates="params", lazy="selectin")

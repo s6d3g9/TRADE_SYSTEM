@@ -19,14 +19,14 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base
+from app.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
     from app.models.user import User
     from app.models.strategylab import StrategyAlignment
 
 
-class Bot(Base):
+class Bot(Base, TimestampMixin):
     """Trading bot configuration and state"""
 
     __tablename__ = "bots"
@@ -51,10 +51,6 @@ class Bot(Base):
     mode: Mapped[str] = mapped_column(String, nullable=False, default="dry_run", index=True)
 
     # Metadata
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
 
     # Additional
     tags: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
@@ -70,7 +66,7 @@ class Bot(Base):
     backtests: Mapped[list["Backtest"]] = relationship("Backtest", back_populates="bot", lazy="noload")
 
 
-class BotSession(Base):
+class BotSession(Base, TimestampMixin):
     """Bot execution session - created each time bot starts"""
 
     __tablename__ = "bot_sessions"
@@ -102,10 +98,6 @@ class BotSession(Base):
     logs_path: Mapped[str | None] = mapped_column(String, nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
 
     # Relationships
     bot: Mapped["Bot"] = relationship("Bot", back_populates="sessions", lazy="selectin")
@@ -114,7 +106,7 @@ class BotSession(Base):
     metrics: Mapped[list["BotMetric"]] = relationship("BotMetric", back_populates="session", lazy="noload")
 
 
-class Trade(Base):
+class Trade(Base, TimestampMixin):
     """Individual trade execution"""
 
     __tablename__ = "trades"
@@ -173,17 +165,13 @@ class Trade(Base):
     # Additional
     meta: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
 
     # Relationships
     bot: Mapped["Bot"] = relationship("Bot", back_populates="trades", lazy="selectin")
     session: Mapped["BotSession | None"] = relationship("BotSession", back_populates="trades", lazy="selectin")
 
 
-class Position(Base):
+class Position(Base, TimestampMixin):
     """Open position (aggregated trades)"""
 
     __tablename__ = "positions"
@@ -238,17 +226,13 @@ class Position(Base):
     # Additional
     meta: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
 
     # Relationships
     bot: Mapped["Bot"] = relationship("Bot", back_populates="positions", lazy="selectin")
     session: Mapped["BotSession | None"] = relationship("BotSession", back_populates="positions", lazy="selectin")
 
 
-class Backtest(Base):
+class Backtest(Base, TimestampMixin):
     """Backtest results - связь с ботом, alignment и пользователем"""
 
     __tablename__ = "backtests"
@@ -314,11 +298,7 @@ class Backtest(Base):
     # Additional metrics (хранит полный JSON отчёта Freqtrade)
     metrics: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
 
     # Relationships
     bot: Mapped["Bot | None"] = relationship("Bot", back_populates="backtests", lazy="selectin")
@@ -326,7 +306,7 @@ class Backtest(Base):
     user: Mapped["User | None"] = relationship("User", back_populates="backtests", lazy="selectin")
 
 
-class BotMetric(Base):
+class BotMetric(Base, TimestampMixin):
     """Real-time bot metrics snapshots - снимки состояния каждые 1-5 минут"""
 
     __tablename__ = "bot_metrics"
@@ -372,7 +352,7 @@ class BotMetric(Base):
     session: Mapped["BotSession | None"] = relationship("BotSession", back_populates="metrics", lazy="selectin")
 
 
-class ExchangeAccount(Base):
+class ExchangeAccount(Base, TimestampMixin):
     """Exchange API credentials - зашифрованные ключи бирж"""
 
     __tablename__ = "exchange_accounts"
@@ -409,10 +389,6 @@ class ExchangeAccount(Base):
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_balance: Mapped[Decimal | None] = mapped_column(Numeric(20, 8), nullable=True)
 
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
 
     # Relationships
     user: Mapped["User"] = relationship("User", back_populates="exchange_accounts", lazy="selectin")
