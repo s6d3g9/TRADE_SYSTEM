@@ -9,13 +9,13 @@
 - [x] Рефакторинг `models/base.py` (Создание `TimestampMixin` для автоматического трекинга времени).
 - [x] Фиксация в Git.
 
-## Фаза 2: Слой Данных (Data Layer / Models) - ⏳ В ПРОЦЕССЕ
-- [ ] Рефакторинг `models/trading.py` (Bot, BotSession, Trade, Backtest). Применение `TimestampMixin`, проверка связей (Relationships).
-- [ ] Рефакторинг `models/strategylab.py` (StrategyTemplate, FreqAIModelVariant).
-- [ ] Создание миграций Alembic для обновленных моделей.
-- [ ] Фиксация в Git.
+## Фаза 2: Слой Данных (Data Layer / Models) - ✅ ЗАВЕРШЕНО
+- [x] Рефакторинг `models/trading.py` (Bot, BotSession, Trade, Backtest). Применение `TimestampMixin`, проверка связей (Relationships).
+- [x] Рефакторинг `models/strategylab.py` (StrategyTemplate, FreqAIModelVariant).
+- [x] Создание миграций Alembic для обновленных моделей (схема не изменилась, миграции не требуются).
+- [x] Фиксация в Git.
 
-## Фаза 3: Доменный Слой (Domain Layer / Schemas) - 📝 ОЖИДАЕТ
+## Фаза 3: Доменный Слой (Domain Layer / Schemas) - ⏳ В ПРОЦЕССЕ
 - [ ] Обновление Pydantic схем в `schemas/trading.py` до стандарта Pydantic V2 (ConfigDict, строгая типизация).
 - [ ] Обновление схем в `schemas/strategylab.py`.
 - [ ] Фиксация в Git.
