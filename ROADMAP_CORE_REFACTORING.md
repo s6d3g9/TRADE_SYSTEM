@@ -15,12 +15,12 @@
 - [x] Создание миграций Alembic для обновленных моделей (схема не изменилась, миграции не требуются).
 - [x] Фиксация в Git.
 
-## Фаза 3: Доменный Слой (Domain Layer / Schemas) - ⏳ В ПРОЦЕССЕ
-- [ ] Обновление Pydantic схем в `schemas/trading.py` до стандарта Pydantic V2 (ConfigDict, строгая типизация).
-- [ ] Обновление схем в `schemas/strategylab.py`.
-- [ ] Фиксация в Git.
+## Фаза 3: Доменный Слой (Domain Layer / Schemas) - ✅ ЗАВЕРШЕНО
+- [x] Обновление Pydantic схем в `schemas/trading.py` до стандарта Pydantic V2 (ConfigDict, строгая типизация).
+- [x] Обновление схем в `schemas/strategylab.py`.
+- [x] Фиксация в Git.
 
-## Фаза 4: Слой Бизнес-логики (Service Layer) - 📝 ОЖИДАЕТ
+## Фаза 4: Слой Бизнес-логики (Service Layer) - ⏳ В ПРОЦЕССЕ
 *Здесь мы пишем "Умную обертку" для Freqtrade.*
 - [ ] Создание `services/bot_service.py` (Логика генерации конфигов и запуска Docker-контейнеров Freqtrade).
 - [ ] Создание `services/backtest_service.py` (Логика запуска бэктестов и парсинга результатов).
