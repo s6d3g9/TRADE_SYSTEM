@@ -32,7 +32,8 @@ export async function fetchBinancePairs(quote: string = 'USDT'): Promise<Exchang
       tickerMap.set(t.symbol, t)
     }
     
-    const pairs: ExchangePair[] = []
+    const pairMap = new Map<string, ExchangePair>()
+
     for (const symbol of infoData.symbols || []) {
       if (symbol.status !== 'TRADING') continue
       if (!symbol.isSpotTradingAllowed) continue
@@ -40,8 +41,9 @@ export async function fetchBinancePairs(quote: string = 'USDT'): Promise<Exchang
       
       const ticker = tickerMap.get(symbol.symbol)
       
-      pairs.push({
-        pair: `${symbol.baseAsset}/${symbol.quoteAsset}`,
+      const pair = `${symbol.baseAsset}/${symbol.quoteAsset}`
+      pairMap.set(pair, {
+        pair,
         symbol: symbol.symbol,
         baseAsset: symbol.baseAsset,
         quoteAsset: symbol.quoteAsset,
@@ -51,6 +53,58 @@ export async function fetchBinancePairs(quote: string = 'USDT'): Promise<Exchang
         change24hPct: ticker ? parseFloat(ticker.priceChangePercent) : undefined,
       })
     }
+
+    // Try to extend with Binance USDT perpetual markets (best effort).
+    try {
+      const [fInfoRes, fTickerRes] = await Promise.all([
+        fetch('https://fapi.binance.com/fapi/v1/exchangeInfo'),
+        fetch('https://fapi.binance.com/fapi/v1/ticker/24hr'),
+      ])
+
+      const fInfoData = await fInfoRes.json()
+      const fTickerData = await fTickerRes.json()
+
+      const fTickerMap = new Map<string, any>()
+      for (const t of fTickerData || []) {
+        fTickerMap.set(t.symbol, t)
+      }
+
+      for (const symbol of fInfoData.symbols || []) {
+        if (symbol.status !== 'TRADING') continue
+        if (symbol.contractType !== 'PERPETUAL') continue
+        if (symbol.quoteAsset !== quote) continue
+
+        const pair = `${symbol.baseAsset}/${symbol.quoteAsset}`
+        const ticker = fTickerMap.get(symbol.symbol)
+        const existing = pairMap.get(pair)
+
+        if (existing) {
+          if (!existing.kinds.includes('perp')) existing.kinds.push('perp')
+          if (!existing.lastPrice && ticker) existing.lastPrice = parseFloat(ticker.lastPrice)
+          if ((!existing.volume24h || existing.volume24h <= 0) && ticker) {
+            existing.volume24h = parseFloat(ticker.quoteVolume)
+          }
+          if (typeof existing.change24hPct !== 'number' && ticker) {
+            existing.change24hPct = parseFloat(ticker.priceChangePercent)
+          }
+        } else {
+          pairMap.set(pair, {
+            pair,
+            symbol: symbol.symbol,
+            baseAsset: symbol.baseAsset,
+            quoteAsset: symbol.quoteAsset,
+            kinds: ['perp'],
+            lastPrice: ticker ? parseFloat(ticker.lastPrice) : undefined,
+            volume24h: ticker ? parseFloat(ticker.quoteVolume) : undefined,
+            change24hPct: ticker ? parseFloat(ticker.priceChangePercent) : undefined,
+          })
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to fetch Binance perp pairs:', error)
+    }
+
+    const pairs = Array.from(pairMap.values())
     
     // Sort by volume descending
     pairs.sort((a, b) => (b.volume24h || 0) - (a.volume24h || 0))

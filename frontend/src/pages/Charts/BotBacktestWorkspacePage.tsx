@@ -19,6 +19,7 @@ type PairInfo = {
   kinds: Array<'spot' | 'perp'>
   lastPrice?: number
   volume24h?: number
+  change24hPct?: number
 }
 
 type TradingBacktest = {
@@ -58,11 +59,27 @@ function asNumber(v: unknown): number {
   return Number.isFinite(n) ? n : 0
 }
 
+function formatPrice(value: number | undefined): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+  if (value >= 1000) return value.toFixed(2)
+  if (value >= 1) return value.toFixed(4)
+  return value.toFixed(6)
+}
+
+function formatVolume(value: number | undefined): string {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return '—'
+  if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(2)}B`
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`
+  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`
+  return value.toFixed(0)
+}
+
 export default function BotBacktestWorkspacePage() {
   const [bots, setBots] = useState<BotItem[]>([])
   const [selectedBotId, setSelectedBotId] = useState<string>('')
 
   const [exchange, setExchange] = useState('binance')
+  const [marketType, setMarketType] = useState<'spot' | 'perp'>('spot')
   const [pairs, setPairs] = useState<PairInfo[]>([])
   const [pairSearch, setPairSearch] = useState('')
   const [selectedPairs, setSelectedPairs] = useState<string[]>(['BTC/USDT'])
@@ -194,9 +211,10 @@ export default function BotBacktestWorkspacePage() {
 
   const filteredPairs = useMemo(() => {
     const search = pairSearch.trim().toLowerCase()
-    if (!search) return pairs.slice(0, 200)
-    return pairs.filter((item) => item.pair.toLowerCase().includes(search)).slice(0, 200)
-  }, [pairs, pairSearch])
+    const byKind = pairs.filter((item) => item.kinds.includes(marketType))
+    if (!search) return byKind.slice(0, 200)
+    return byKind.filter((item) => item.pair.toLowerCase().includes(search)).slice(0, 200)
+  }, [pairs, pairSearch, marketType])
 
   const indicators = useMemo(() => {
     const closes = candles.map((c) => c.close)
@@ -244,6 +262,25 @@ export default function BotBacktestWorkspacePage() {
       signals,
     }
   }, [candles, backtestDetail])
+
+  const chartStats = useMemo(() => {
+    if (!candles.length) {
+      return { lastPrice: undefined as number | undefined, tfChangePct: undefined as number | undefined }
+    }
+    const first = candles[0].close
+    const last = candles[candles.length - 1].close
+    if (!Number.isFinite(first) || !Number.isFinite(last) || first === 0) {
+      return { lastPrice: last, tfChangePct: undefined as number | undefined }
+    }
+    return {
+      lastPrice: last,
+      tfChangePct: ((last - first) / first) * 100,
+    }
+  }, [candles])
+
+  const chartPairMeta = useMemo(() => {
+    return pairs.find((item) => item.pair === chartPair)
+  }, [pairs, chartPair])
 
   function togglePair(nextPair: string) {
     setSelectedPairs((prev) => {
@@ -322,7 +359,14 @@ export default function BotBacktestWorkspacePage() {
               <option value="1d">1d</option>
             </select>
             <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--muted)' }}>
-              Выбрано пар: {selectedPairs.length}
+              Цена: {formatPrice(chartStats.lastPrice)} · Изм. ({chartTimeframe}):{' '}
+              <span style={{ color: (chartStats.tfChangePct || 0) >= 0 ? 'var(--up)' : 'var(--down)' }}>
+                {typeof chartStats.tfChangePct === 'number'
+                  ? `${chartStats.tfChangePct >= 0 ? '+' : ''}${chartStats.tfChangePct.toFixed(2)}%`
+                  : '—'}
+              </span>
+              {' · Vol 24h: '}
+              {formatVolume(chartPairMeta?.volume24h)}
             </div>
           </div>
           <CandleChart candles={candles} indicators={indicators} showEma={true} showMacd={false} showRsi={false} />
@@ -342,6 +386,41 @@ export default function BotBacktestWorkspacePage() {
             ))}
           </select>
 
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+            <button
+              onClick={() => setMarketType('spot')}
+              style={{
+                flex: 1,
+                padding: '6px 8px',
+                borderRadius: 6,
+                border: `1px solid ${marketType === 'spot' ? 'var(--primary)' : 'var(--border)'}`,
+                background: marketType === 'spot' ? 'var(--selected)' : 'var(--surface)',
+                color: 'var(--text)',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              Spot
+            </button>
+            <button
+              onClick={() => setMarketType('perp')}
+              style={{
+                flex: 1,
+                padding: '6px 8px',
+                borderRadius: 6,
+                border: `1px solid ${marketType === 'perp' ? 'var(--primary)' : 'var(--border)'}`,
+                background: marketType === 'perp' ? 'var(--selected)' : 'var(--surface)',
+                color: 'var(--text)',
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 600,
+              }}
+            >
+              Perp
+            </button>
+          </div>
+
           <input
             value={pairSearch}
             onChange={(e) => setPairSearch(e.target.value)}
@@ -360,7 +439,20 @@ export default function BotBacktestWorkspacePage() {
                 >
                   <input type="checkbox" checked={checked} onChange={() => togglePair(item.pair)} />
                   <span style={{ fontSize: 12, flex: 1 }}>{item.pair}</span>
-                  <span style={{ fontSize: 10, color: 'var(--muted)' }}>{item.kinds.join(',')}</span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)' }}>{formatPrice(item.lastPrice)}</span>
+                  <span style={{
+                    fontSize: 11,
+                    color: asNumber(item.change24hPct) >= 0 ? 'var(--up)' : 'var(--down)',
+                    minWidth: 60,
+                    textAlign: 'right',
+                  }}>
+                    {typeof item.change24hPct === 'number'
+                      ? `${item.change24hPct >= 0 ? '+' : ''}${item.change24hPct.toFixed(2)}%`
+                      : '—'}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--muted)', minWidth: 62, textAlign: 'right' }}>
+                    {formatVolume(item.volume24h)}
+                  </span>
                 </label>
               )
             })}
