@@ -8,7 +8,7 @@ from uuid import uuid4
 import httpx
 from pydantic import BaseModel
 from mnemonic import Mnemonic
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.emailer import send_email_async
+from app.core.exceptions import BadRequestError, UnauthorizedError
 from app.core.redis import get_redis
 from app.core.security import create_access_token, decode_access_token, hash_login_token, hash_password, seed_phrase_fingerprint, verify_password
 from app.models.email_login import EmailLoginToken
@@ -85,7 +86,7 @@ async def password_register(p: PasswordRegisterIn, session: AsyncSession = Depen
     result = await session.execute(select(User).where(User.email == email))
     existing: User | None = result.scalar_one_or_none()
     if existing:
-        raise HTTPException(status_code=400, detail="User already exists")
+        raise BadRequestError("User already exists")
 
     recovery_mnemonic = _mnemo.generate(strength=128)
     seed_fp = seed_phrase_fingerprint(recovery_mnemonic)
@@ -111,9 +112,9 @@ async def password_login(p: PasswordLoginIn, session: AsyncSession = Depends(get
     result = await session.execute(select(User).where(User.email == email))
     user: User | None = result.scalar_one_or_none()
     if not user or not user.password_hash:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise UnauthorizedError("Invalid credentials")
     if not verify_password(user.password_hash, p.password):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+        raise UnauthorizedError("Invalid credentials")
     return await _issue_token_for_user(user)
 
 
@@ -125,15 +126,15 @@ async def password_reset(p: PasswordResetIn, session: AsyncSession = Depends(get
     result = await session.execute(select(User).where(User.email == email))
     user: User | None = result.scalar_one_or_none()
     if not user or not user.seed_fingerprint:
-        raise HTTPException(status_code=400, detail="Invalid recovery details")
+        raise BadRequestError("Invalid recovery details")
 
     recovery = p.recovery_mnemonic.strip()
     if not _mnemo.check(recovery):
-        raise HTTPException(status_code=400, detail="Invalid recovery details")
+        raise BadRequestError("Invalid recovery details")
 
     fp = seed_phrase_fingerprint(recovery)
     if fp != user.seed_fingerprint:
-        raise HTTPException(status_code=400, detail="Invalid recovery details")
+        raise BadRequestError("Invalid recovery details")
 
     user.password_hash = hash_password(p.new_password)
     user.password_updated_at = _utcnow()
@@ -145,10 +146,10 @@ async def _get_user_by_jwt(session: AsyncSession, token: str) -> User:
     payload = decode_access_token(token)
     user_id = payload.get("sub")
     if not user_id:
-        raise HTTPException(status_code=401, detail="Invalid token")
+        raise UnauthorizedError("Invalid token")
     user = await session.get(User, user_id)
     if not user:
-        raise HTTPException(status_code=401, detail="User not found")
+        raise UnauthorizedError("User not found")
     return user
 
 
@@ -169,7 +170,7 @@ def _get_bearer_token(request: Request) -> str | None:
 async def me(request: Request, session: AsyncSession = Depends(get_db)) -> MeOut:
     token = _get_bearer_token(request)
     if not token:
-        raise HTTPException(status_code=401, detail="Missing Authorization header")
+        raise UnauthorizedError("Missing Authorization header")
     user = await _get_user_by_jwt(session, token)
     return MeOut(user=UserOut.model_validate(user, from_attributes=True))
 
@@ -268,19 +269,19 @@ async def email_login_start(
 async def email_login_verify(p: EmailLoginVerifyIn, request: Request, session: AsyncSession = Depends(get_db)) -> TokenOut:
     raw_token = p.token.strip()
     if not raw_token:
-        raise HTTPException(status_code=400, detail="Missing token")
+        raise BadRequestError("Missing token")
 
     token_hash = hash_login_token(raw_token)
     result = await session.execute(select(EmailLoginToken).where(EmailLoginToken.token_hash == token_hash))
     row: EmailLoginToken | None = result.scalar_one_or_none()
     if not row:
-        raise HTTPException(status_code=400, detail="Invalid token")
+        raise BadRequestError("Invalid token")
 
     now = _utcnow()
     if row.consumed_at is not None:
-        raise HTTPException(status_code=400, detail="Token already used")
+        raise BadRequestError("Token already used")
     if row.expires_at < now:
-        raise HTTPException(status_code=400, detail="Token expired")
+        raise BadRequestError("Token expired")
 
     # Upsert user by email.
     email = row.email
@@ -303,7 +304,7 @@ async def email_login_verify(p: EmailLoginVerifyIn, request: Request, session: A
 @router.get("/google/login")
 async def google_login(next: str | None = None):
     if not settings.google_oauth_client_id or not settings.google_oauth_redirect_uri:
-        raise HTTPException(status_code=400, detail="Google OAuth not configured")
+        raise BadRequestError("Google OAuth not configured")
 
     state = secrets.token_urlsafe(16)
 
@@ -329,15 +330,15 @@ async def google_login(next: str | None = None):
 @router.get("/google/callback")
 async def google_callback(code: str | None = None, state: str | None = None, session: AsyncSession = Depends(get_db)):
     if not code or not state:
-        raise HTTPException(status_code=400, detail="Missing code/state")
+        raise BadRequestError("Missing code/state")
     if not settings.google_oauth_client_id or not settings.google_oauth_client_secret or not settings.google_oauth_redirect_uri:
-        raise HTTPException(status_code=400, detail="Google OAuth not configured")
+        raise BadRequestError("Google OAuth not configured")
 
     redis = get_redis()
     key = f"oauth:google:state:{state}"
     saved = await redis.get(key)
     if not saved:
-        raise HTTPException(status_code=400, detail="Invalid state")
+        raise BadRequestError("Invalid state")
     await redis.delete(key)
 
     token_resp = None
@@ -358,7 +359,7 @@ async def google_callback(code: str | None = None, state: str | None = None, ses
 
         access_token = token_data.get("access_token")
         if not access_token:
-            raise HTTPException(status_code=400, detail="Missing access_token")
+            raise BadRequestError("Missing access_token")
 
         userinfo = await client.get(
             "https://openidconnect.googleapis.com/v1/userinfo",
@@ -370,7 +371,7 @@ async def google_callback(code: str | None = None, state: str | None = None, ses
     google_sub = info.get("sub")
     email = (info.get("email") or "").lower().strip()
     if not google_sub or not email:
-        raise HTTPException(status_code=400, detail="Invalid user info")
+        raise BadRequestError("Invalid user info")
 
     name = info.get("name")
     picture = info.get("picture")

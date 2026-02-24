@@ -4,13 +4,14 @@ import time
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from typing_extensions import Literal
 
 from app.core.config import settings
 from app.api.deps import maybe_current_user
 from app.core.db import get_db
+from app.core.exceptions import AppError, BadRequestError, ExternalServiceError
 from app.models.user import User
 from app.models.user_settings import UserSettings
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -85,9 +86,9 @@ def _provider_api_url(provider: str) -> str:
         return "https://api.openai.com/v1/chat/completions"
     if provider == "local":
         if not settings.ai_models_api_url:
-            raise HTTPException(status_code=500, detail="Local AI provider is not configured")
+            raise AppError(status_code=500, code="config_error", message="Local AI provider is not configured")
         return settings.ai_models_api_url
-    raise HTTPException(status_code=400, detail="Unsupported provider")
+    raise BadRequestError("Unsupported provider")
 
 
 def _effective_token(provider: str, token: str | None) -> str:
@@ -109,7 +110,7 @@ def _effective_token(provider: str, token: str | None) -> str:
     # saved token (matching provider)
     # NOTE: only available when user is authenticated
     
-    raise HTTPException(status_code=400, detail="Missing AI provider token")
+    raise BadRequestError("Missing AI provider token")
 
 
 def _effective_model(provider: str, model: str | None) -> str:
@@ -117,7 +118,7 @@ def _effective_model(provider: str, model: str | None) -> str:
         return model
     if provider == "local" and settings.ai_models_model:
         return settings.ai_models_model
-    raise HTTPException(status_code=400, detail="Missing AI model")
+    raise BadRequestError("Missing AI model")
 
 
 async def _user_saved_ai(session: AsyncSession, user: User | None) -> UserSettings | None:
@@ -179,7 +180,7 @@ async def chat(
         try:
             resp = await client.post(api_url, headers=headers, json=payload)
         except httpx.RequestError as exc:
-            raise HTTPException(status_code=502, detail=f"AI request failed: {exc}")
+            raise ExternalServiceError(f"AI request failed: {exc}")
 
     if resp.status_code >= 400:
         msg = _extract_error_message(resp)
@@ -192,10 +193,11 @@ async def chat(
             # 400 Bad Request is appropriate for invalid input (bad token)
             status = 400 
 
-        raise HTTPException(
+        raise AppError(
             status_code=status,
-            detail={
-                "error": "provider_error",
+            code="provider_error",
+            message="AI provider request failed",
+            details={
                 "provider": req.provider,
                 "status": status,
                 "message": msg,
@@ -206,7 +208,7 @@ async def chat(
     choice = (data.get("choices") or [{}])[0]
     content = (choice.get("message") or {}).get("content")
     if not content:
-        raise HTTPException(status_code=502, detail="AI returned empty content")
+        raise ExternalServiceError("AI returned empty content")
 
     return ChatResponse(content=content, provider=req.provider, model=model)
 
@@ -233,19 +235,19 @@ async def list_openrouter_models() -> dict:
                 },
             )
         except httpx.RequestError as exc:
-            raise HTTPException(status_code=502, detail=f"OpenRouter request failed: {exc}")
+            raise ExternalServiceError(f"OpenRouter request failed: {exc}")
 
     if resp.status_code >= 400:
-        raise HTTPException(status_code=502, detail=f"OpenRouter error: HTTP {resp.status_code}")
+        raise ExternalServiceError(f"OpenRouter error: HTTP {resp.status_code}")
 
     try:
         payload = resp.json()
     except Exception as exc:
-        raise HTTPException(status_code=502, detail=f"OpenRouter invalid JSON: {exc}")
+        raise ExternalServiceError(f"OpenRouter invalid JSON: {exc}")
 
     data = payload.get("data")
     if not isinstance(data, list):
-        raise HTTPException(status_code=502, detail="OpenRouter response missing 'data' list")
+        raise ExternalServiceError("OpenRouter response missing 'data' list")
 
     def _to_float(v: Any) -> float | None:
         if v is None:

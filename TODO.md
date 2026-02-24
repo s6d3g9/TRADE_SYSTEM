@@ -22,3 +22,4 @@
 - [x] Переведены роуты `signals/analysis/neuro` с `HTTPException` на доменные ошибки (`BadRequestError/NotFoundError/ConflictError`).
 - [x] Добавлен `UnauthorizedError` и переведены `api/deps.py` + `api/market.py` на доменные ошибки.
 - [x] Переведены `api/store.py` и `api/alignment.py` с `HTTPException` на доменные ошибки (`NotFoundError`).
+- [x] Переведены `api/ai.py` и `api/auth.py` с `HTTPException` на доменные ошибки (`AppError`-иерархия).
