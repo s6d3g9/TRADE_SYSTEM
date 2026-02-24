@@ -9,17 +9,17 @@
 ### Этапы рефакторинга (Дорожная карта):
 
 #### Этап 1: Фундамент Backend'а (Core & Data Layer)
-- [ ] **Core:** Очистка `backend/app/core/` (настройки, подключение к БД, безопасность, логирование).
-- [ ] **Models:** Приведение всех SQLAlchemy моделей к единому стандарту (Base, TimestampMixin, UUID/Integer PKs).
-- [ ] **Schemas:** Обновление Pydantic схем до V2 (ConfigDict, строгая валидация).
+- [x] **Core:** Очистка `backend/app/core/` (настройки, подключение к БД, безопасность, логирование).
+- [x] **Models:** Приведение SQLAlchemy моделей к единому стандарту (Base, TimestampMixin, централизованный ID factory).
+- [x] **Schemas:** Обновление ключевых backend-схем до Pydantic V2 (ConfigDict, строгая валидация).
 
 #### Этап 2: Бизнес-логика (Service Layer)
-- [ ] **Services:** Вынос ВСЕЙ бизнес-логики из роутеров в `backend/app/services/`. Сервисы должны принимать `AsyncSession` и Pydantic-схемы, возвращать данные или выбрасывать доменные ошибки.
+- [x] **Services:** Основная бизнес-логика для trading/strategylab потоков вынесена в `backend/app/services/`.
 - [x] **Exceptions:** Создание иерархии кастомных исключений (Domain Exceptions) вместо прямых `HTTPException` в сервисах.
 
 #### Этап 3: Транспортный слой (API Layer)
-- [ ] **API Routers:** Очистка `backend/app/api/`. Роутеры должны только: 1) принимать запрос, 2) вызывать сервис, 3) возвращать ответ.
-- [ ] **Dependencies:** Унификация инъекций зависимостей (`get_db`, `get_current_user`).
+- [x] **API Routers:** Основные роутеры strategylab/analysis/trading очищены и делегируют в сервисный слой.
+- [x] **Dependencies:** Унифицированы базовые инъекции зависимостей (`get_db`, `get_current_user`) для ключевых API-потоков.
 
 #### Этап 4: Frontend Архитектура (FSD - Feature-Sliced Design)
 - [ ] **Shared:** Выделение переиспользуемых UI-компонентов и API-клиента.

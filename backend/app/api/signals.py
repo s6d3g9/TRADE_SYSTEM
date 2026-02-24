@@ -6,7 +6,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,11 +30,12 @@ class CanonicalSignalPair(BaseModel):
 
 
 class CanonicalSignalEnvelope(BaseModel):
-    schema: str = Field(default="th.signal.v1")
+    schema_version: str = Field(default="th.signal.v1", alias="schema")
     provider_id: str
     timestamp: int
     ttl_sec: int
     signals: dict[str, CanonicalSignalPair]
+    model_config = ConfigDict(populate_by_name=True)
 
 
 @router.post("/ingest")
@@ -72,7 +73,14 @@ async def ingest(envelope: CanonicalSignalEnvelope, session: AsyncSession = Depe
     # Optional: append to provider stream (best-effort)
     try:
         stream = f"{SIGNAL_PROVIDER_STREAM_PREFIX}{envelope.provider_id}"
-        await redis.xadd(stream, {"schema": envelope.schema, "payload": envelope.model_dump_json()}, maxlen=10_000)
+        await redis.xadd(
+            stream,
+            {
+                "schema": envelope.schema_version,
+                "payload": envelope.model_dump_json(by_alias=True),
+            },
+            maxlen=10_000,
+        )
     except Exception:  # noqa: BLE001
         pass
 
