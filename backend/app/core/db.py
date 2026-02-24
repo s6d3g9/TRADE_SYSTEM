@@ -41,6 +41,11 @@ class DatabaseManager:
 # Глобальный инстанс менеджера БД
 db_manager = DatabaseManager()
 
+
+def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
+    """Совместимый реэкспорт для старых импортов (API/тесты)."""
+    return db_manager.get_sessionmaker()
+
 async def get_db() -> AsyncIterator[AsyncSession]:
     """
     Dependency Injection для FastAPI роутеров.
